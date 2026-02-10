@@ -25,8 +25,8 @@
 - **フレームワーク**: Hono v4.11.8
 - **リアルタイム通信**: Socket.IO v4.8.3
 - **言語**: TypeScript
-- **データベース**: MongoDB
-- **ドライバー**: MongoDB Node.js Driver v7.1.0
+- **データベース**: Supabase（PostgreSQL）
+- **ORM**: Drizzle ORM + drizzle-kit（マイグレーション）
 - **キャッシュ/キュー**: Redis（マッチング待機キュー用）
 
 ## 主要技術要件
@@ -37,10 +37,11 @@
 - チャットルーム状態の同期
 
 ### データベース
-- MongoDB を使用
+- Supabase（PostgreSQL）を使用
 - チャットルーム情報の管理
 - メッセージの一時保存（10分間のみ）
 - 匿名ユーザーセッション管理
+- pg_cronによる定期削除ジョブ
 
 ## 開発環境
 - パッケージマネージャー: pnpm

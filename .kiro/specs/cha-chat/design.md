@@ -25,27 +25,20 @@
 - 友達機能や連絡先リスト
 - グループチャット（1対1のみ）
 - メッセージ検索や編集機能
-- リアルタイム翻訳機能（将来検討）
 
 ## Architecture
 
 ### Architecture Pattern & Boundary Map
 
-**アーキテクチャ統合**:
-- **選択パターン**: シンプルレイヤードアーキテクチャ + イベント駆動要素
-- **選択理由**: 初期実装の速度とリアルタイム性のバランスを重視。WebSocket中心のプロジェクトに適合し、実装複雑度を抑えながら必要な機能を提供できる。
-- **ドメイン/機能境界**:
+**Architecture Integration**:
+- **Selected pattern**: シンプルレイヤードアーキテクチャ + イベント駆動要素
+- **Rationale**: 初期実装の速度とリアルタイム性のバランスを重視。WebSocket中心のプロジェクトに適合し、実装複雑度を抑えながら必要な機能を提供。
+- **Domain/feature boundaries**:
   - **マッチングドメイン**: ユーザー待機キュー管理、マッチングロジック、セッション生成
   - **チャットルームドメイン**: ルーム状態管理、タイマー制御、参加者管理
   - **メッセージングドメイン**: メッセージ送受信、削除ロジック、WebSocket通信
   - **クライアントレイヤー**: Web/モバイルUI、ローカル状態管理、WebSocket接続管理
-- **既存パターンの保持**: 新規プロジェクトのため該当なし
-- **新規コンポーネントの根拠**:
-  - MatchingService: 匿名マッチングの独立した責務
-  - RoomManager: チャットルームのライフサイクル管理
-  - MessageService: メッセージ送受信と削除ロジックの分離
-  - WebSocketGateway: リアルタイム通信のエントリーポイント
-- **ステアリング準拠**: プロダクトビジョン（匿名性・一時性・シンプルさ）と技術スタック要件に整合
+- **Steering compliance**: プロダクトビジョン（匿名性・一時性・シンプルさ）と技術スタック要件に整合
 
 ```mermaid
 graph TB
@@ -63,7 +56,7 @@ graph TB
     end
 
     subgraph DataLayer[データレイヤー]
-        MongoDB[(MongoDB)]
+        Supabase[(Supabase - PostgreSQL)]
         Redis[(Redis - Queue)]
     end
 
@@ -76,44 +69,41 @@ graph TB
     WSGateway --> MessageSvc
 
     MatchingSvc --> Redis
-    RoomMgr --> MongoDB
-    MessageSvc --> MongoDB
+    RoomMgr --> Supabase
+    MessageSvc --> Supabase
 ```
 
-**主要な設計決定**:
-- **バックエンドフレームワーク**: Hono v4.11.8を採用（軽量高速、Web Standards準拠、モダンAPI）
-- **バックエンド通信**: Socket.IO v4.8.3を採用（自動再接続、room管理機能、Honoと並行動作）
-- **Hono + Socket.IO統合**: HonoでHTTPエンドポイントを処理、Socket.IOでWebSocketリアルタイム通信を処理（別々のポートまたは同一ポート）
-- **マッチングアルゴリズム**: 初期実装はシンプルなFIFOキューベース（将来的に興味ベースマッチング拡張可能）
-- **メッセージ削除**: サーバー側での明示的削除 + MongoDB TTLインデックスをフェイルセーフとして併用
-- **状態管理**: Web版はSvelte Store、モバイル版はRiverpod（各プラットフォームの標準的手法）
+**Key Decisions**:
+- **バックエンドフレームワーク**: Hono v4.11.8を採用（軽量高速、Web Standards準拠）
+- **リアルタイム通信**: Socket.IO v4.8.3を採用（room管理機能、自動再接続）
+- **データベース**: Supabase（PostgreSQL）+ Drizzle ORM（型安全、マイグレーション管理）
+- **マッチングキュー**: Redis（FIFO、アトミック操作）
+- **状態管理**: Web版はSvelte Store、モバイル版はRiverpod
 
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| **Frontend - Web** | Svelte v5.49.0 | Webブラウザ版UI実装 | Runes、Snippets、改善されたTypeScript対応 |
+| **Frontend - Web** | Svelte v5.49.0 | Webブラウザ版UI実装 | Runes、改善されたTypeScript対応 |
 | | socket.io-client v4.8.3 | WebSocket通信クライアント | Socket.IOサーバーとの双方向通信 |
 | | Svelte Store | 状態管理 | チャット状態、メッセージ履歴の管理 |
-| **Frontend - Mobile** | Flutter v3.38.6 | iOS/Androidアプリ実装 | iOS 26、Xcode 26、macOS 26完全対応 |
+| **Frontend - Mobile** | Flutter v3.38.6 | iOS/Androidアプリ実装 | クロスプラットフォーム |
 | | socket_io_client | WebSocket通信クライアント | Socket.IOサーバーとの双方向通信 |
-| | Riverpod | 状態管理 | 型安全な状態管理、テスト容易性 |
-| **Backend - Runtime** | Node.js v24.13.0 LTS "Krypton" | サーバーランタイム | 2028年4月までLTSサポート、非同期I/O |
-| | Hono v4.11.8 | HTTPフレームワーク | 軽量高速、Web Standards準拠、モダンAPI |
-| | Socket.IO v4.8.3 | WebSocketサーバー | リアルタイム双方向通信、room管理 |
-| | TypeScript | 開発言語 | 型安全性、保守性向上 |
-| **Data - Storage** | MongoDB | プライマリデータストア | ドキュメント指向、TTLインデックス対応 |
-| | MongoDB Node.js Driver v7.1.0 | MongoDB接続ドライバー | 最新BSON機能、パフォーマンス改善 |
-| **Data - Cache/Queue** | Redis | マッチングキュー管理 | 高速なキュー操作、セッション管理 |
-| **Infrastructure** | pnpm workspace | モノレポ管理 | Web版とバックエンドの依存関係統合管理 |
+| | Riverpod | 状態管理 | 型安全な状態管理 |
+| **Backend - Runtime** | Node.js v24.13.0 LTS | サーバーランタイム | 2028年4月までLTSサポート |
+| | Hono v4.11.8 | HTTPフレームワーク | 軽量高速、モダンAPI |
+| | Socket.IO v4.8.3 | WebSocketサーバー | room管理、自動再接続 |
+| | TypeScript | 開発言語 | 型安全性 |
+| **Data - Storage** | Supabase (PostgreSQL) | プライマリデータストア | マネージドPostgreSQL |
+| | Drizzle ORM | ORM | 型安全クエリ、マイグレーション |
+| | drizzle-kit | マイグレーションツール | スキーマ管理 |
+| **Data - Cache/Queue** | Redis | マッチングキュー管理 | FIFO、セッション管理 |
+| | ioredis | Redisクライアント | 接続プール対応 |
+| **Infrastructure** | pnpm workspace | モノレポ管理 | 依存関係統合管理 |
 | | Biome | リンター/フォーマッター | コード品質統一 |
-
-**詳細な根拠**:
-- Honoの選択: 軽量かつ高速、Web Standards準拠でモダンなAPI。Socket.IOとの統合が可能（Node.js環境）。将来的に他のランタイム（Bun、Deno等）への移行も視野に入れやすい（`research.md` 参照）
-- Socket.IOの選択: 調査により、ネイティブWebSocketと比較して開発速度と機能豊富さで優位。チャットルーム管理機能が組み込み済み。Honoと並行動作。trade-offとして若干のオーバーヘッドがあるが、初期実装には適切（`research.md` 参照）
-- MongoDBのTTLインデックス: チャット終了後の自動削除を保証するフェイルセーフ機構。最大60秒の削除遅延があるが、明示的削除と組み合わせることで問題なし（`research.md` 参照）
-- Redis導入: マッチングキューの高速処理と並行制御のため。将来的なスケーラビリティ拡張にも対応可能（`research.md` 参照）
-- 最新バージョン採用: 2026年2月時点の安定版を使用し、長期サポートと最新機能を確保（`research.md`、`tech.md` 参照）
+| **Containerization** | Docker | コンテナランタイム | 開発環境統一 |
+| | Docker Compose v2 | オーケストレーション | サービス管理 |
+| | Redis 7-alpine | キャッシュ/キュー | 軽量イメージ |
 
 ## System Flows
 
@@ -127,35 +117,33 @@ sequenceDiagram
     participant Match as Matching Service
     participant Queue as Redis Queue
     participant Room as Room Manager
-    participant DB as MongoDB
+    participant DB as Supabase
 
-    User1->>Gateway: マッチングリクエスト
-    Gateway->>Match: enqueueUser(user1Id)
-    Match->>Queue: LPUSH waiting_queue user1Id
-    Match-->>User1: 待機中...
+    User1->>Gateway: requestMatch
+    Gateway->>Match: enqueueUser(session1)
+    Match->>Queue: LPUSH waiting_queue session1
+    Match-->>User1: waiting
 
-    User2->>Gateway: マッチングリクエスト
-    Gateway->>Match: enqueueUser(user2Id)
-    Match->>Queue: LPUSH waiting_queue user2Id
-    Match->>Queue: RPOP waiting_queue (user1Id)
-    Match->>Queue: RPOP waiting_queue (user2Id)
+    User2->>Gateway: requestMatch
+    Gateway->>Match: enqueueUser(session2)
+    Match->>Queue: LPUSH waiting_queue session2
+    Match->>Queue: RPOP waiting_queue x2
 
-    Match->>Room: createRoom(user1Id, user2Id)
-    Room->>DB: INSERT chatRoom
+    Match->>Room: createRoom(session1, session2)
+    Room->>DB: INSERT chat_rooms
     Room-->>Match: roomId
 
-    Match->>Gateway: matchFound(user1Id, user2Id, roomId)
-    Gateway-->>User1: マッチング成立 (roomId)
-    Gateway-->>User2: マッチング成立 (roomId)
+    Match->>Gateway: matchFound(session1, session2, roomId)
+    Gateway-->>User1: matchFound
+    Gateway-->>User2: matchFound
 
-    Room->>Room: startTimer(10分)
+    Room->>Room: startTimer(10min)
 ```
 
-**主要な決定事項**:
-- FIFOキューベースのシンプルなマッチングアルゴリズムを採用（公平性と実装速度を優先）
-- Redis LPUSHとRPOPでアトミックなキュー操作を実現
-- マッチング成立時に即座にチャットルームを作成し、10分タイマーを開始
-- マッチング待機中はWebSocket接続を維持し、リアルタイムで成立通知を送信
+**Key Decisions**:
+- FIFOキューベースのシンプルなマッチングアルゴリズム
+- Redis LPUSH/RPOPでアトミック操作
+- マッチング成立時に即座にチャットルーム作成
 
 ### メッセージ送受信フロー
 
@@ -165,29 +153,28 @@ sequenceDiagram
     participant User2
     participant Gateway as WebSocket Gateway
     participant MsgSvc as Message Service
-    participant DB as MongoDB
+    participant DB as Supabase
 
     User1->>Gateway: sendMessage(roomId, text)
-    Gateway->>MsgSvc: handleMessage(user1Id, roomId, text)
+    Gateway->>MsgSvc: handleMessage(session1, roomId, text)
 
-    MsgSvc->>DB: INSERT message
-    MsgSvc->>MsgSvc: countUserMessages(user1Id, roomId)
+    MsgSvc->>DB: INSERT messages
+    MsgSvc->>MsgSvc: countUserMessages(session1, roomId)
 
     alt 自分のメッセージが4件以上
-        MsgSvc->>DB: DELETE oldest user1 message
+        MsgSvc->>DB: DELETE oldest message
         MsgSvc-->>User1: messageDeleted(oldMessageId)
     end
 
     MsgSvc->>Gateway: broadcast(roomId, message)
-    Gateway-->>User1: newMessage(message)
-    Gateway-->>User2: newMessage(message)
+    Gateway-->>User1: newMessage
+    Gateway-->>User2: newMessage
 ```
 
-**主要な決定事項**:
-- メッセージ送信と削除判定を同一トランザクションで処理（整合性保証）
-- 各ユーザーが送信したメッセージ数をカウントし、4件以上なら最古のメッセージを削除
-- 削除はサーバー側で実行し、クライアントに通知（UIから即座に非表示）
-- WebSocketのroom機能でチャットルーム内の全参加者にブロードキャスト
+**Key Decisions**:
+- メッセージ送信と削除判定を同一処理で実行
+- 各ユーザーの送信メッセージは最新3件のみ保持
+- Socket.IO room機能でブロードキャスト
 
 ### チャットルーム終了フロー
 
@@ -197,27 +184,19 @@ sequenceDiagram
     participant Room as Room Manager
     participant MsgSvc as Message Service
     participant Gateway as WebSocket Gateway
-    participant DB as MongoDB
+    participant DB as Supabase
     participant User1
     participant User2
 
     Timer->>Room: 10分経過
     Room->>MsgSvc: deleteAllMessages(roomId)
-    MsgSvc->>DB: DELETE messages WHERE roomId
-    Room->>DB: UPDATE chatRoom SET status=closed
+    MsgSvc->>DB: DELETE FROM messages WHERE room_id
+    Room->>DB: UPDATE chat_rooms SET status = closed
 
     Room->>Gateway: roomClosed(roomId)
-    Gateway-->>User1: チャット終了通知
-    Gateway-->>User2: チャット終了通知
-
-    Room->>DB: Schedule TTL deletion (backup)
+    Gateway-->>User1: roomClosed
+    Gateway-->>User2: roomClosed
 ```
-
-**主要な決定事項**:
-- 10分タイマー終了時に全メッセージを明示的に削除
-- チャットルーム状態を`closed`に更新（監査ログとして一時保持）
-- TTLインデックスをフェイルセーフとして設定（万が一削除失敗時の保険）
-- ユーザーに終了通知を送信し、新しいマッチングを促進
 
 ## Requirements Traceability
 
@@ -248,7 +227,7 @@ sequenceDiagram
 | 5.4 | 同一バックエンドAPI使用 | WebSocketGateway | WebSocketEventContract | 全フロー |
 | 5.5 | 同一マッチングプール | MatchingService | MatchingServiceInterface | マッチングフロー |
 | 5.6 | レスポンシブデザイン | WebUI | UIComponents | - |
-| 6.1 | 残り時間カウントダウン表示 | WebUI, MobileUI, RoomManager | UIComponents, WebSocketEventContract | チャットルーム終了フロー |
+| 6.1 | 残り時間カウントダウン表示 | WebUI, MobileUI, RoomManager | UIComponents | チャットルーム終了フロー |
 | 6.2 | 自分/相手メッセージ視覚的区別 | WebUI, MobileUI | UIComponents | - |
 | 6.3 | テキスト入力と送信ボタン提供 | WebUI, MobileUI | UIComponents | メッセージ送受信フロー |
 | 6.4 | メッセージ一覧リアルタイム更新 | WebUI, MobileUI, WebSocketGateway | WebSocketEventContract | メッセージ送受信フロー |
@@ -262,19 +241,17 @@ sequenceDiagram
 
 ## Components and Interfaces
 
-### コンポーネント概要
-
-| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
+| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
-| HonoServer | Backend/HTTP | HTTPエンドポイント処理（ヘルスチェック、API等） | - | Node.js (P0) | API |
-| WebSocketGateway | Backend/通信 | WebSocket接続とイベントルーティング | 全要件 | Socket.IO (P0), HonoServer (P0) | API, Event |
-| MatchingService | Backend/ドメイン | ユーザーマッチングロジック | 1.1-1.4, 5.5 | Redis (P0), RoomManager (P0) | Service, Event |
-| RoomManager | Backend/ドメイン | チャットルーム管理とタイマー制御 | 2.1-2.5, 6.1 | MongoDB (P0), MessageService (P1) | Service, State |
-| MessageService | Backend/ドメイン | メッセージ送受信と削除ロジック | 3.1-3.5, 4.1-4.5 | MongoDB (P0), WebSocketGateway (P0) | Service, Event |
-| SessionManager | Backend/セキュリティ | 匿名セッション生成と管理 | 1.4, 7.1-7.2 | なし | Service |
-| ReportService | Backend/セキュリティ | 不適切コンテンツ報告処理 | 7.5 | MongoDB (P0) | Service |
-| WebUI | Frontend/Web | Svelte実装のWebブラウザUI | 5.1, 5.3, 5.6, 6.1-6.6 | Socket.IO Client (P0), Svelte Store (P0) | State |
-| MobileUI | Frontend/Mobile | Flutter実装のモバイルアプリUI | 5.2, 5.3, 6.1-6.6 | socket_io_client (P0), Riverpod (P0) | State |
+| HonoServer | Backend/HTTP | HTTPエンドポイント処理 | - | Node.js (P0) | API |
+| WebSocketGateway | Backend/通信 | WebSocket接続とイベントルーティング | 全要件 | Socket.IO (P0) | Event |
+| MatchingService | Backend/ドメイン | ユーザーマッチングロジック | 1.1-1.4, 5.5 | Redis (P0), RoomManager (P0) | Service |
+| RoomManager | Backend/ドメイン | チャットルーム管理とタイマー制御 | 2.1-2.5, 6.1 | Supabase (P0), MessageService (P1) | Service, State |
+| MessageService | Backend/ドメイン | メッセージ送受信と削除ロジック | 3.1-3.5, 4.1-4.5 | Supabase (P0), WebSocketGateway (P0) | Service |
+| SessionManager | Backend/セキュリティ | 匿名セッション生成と管理 | 1.4, 7.1-7.2 | - | Service |
+| ReportService | Backend/セキュリティ | 不適切コンテンツ報告処理 | 7.5 | Supabase (P0) | Service |
+| WebUI | Frontend/Web | Svelte実装のWebブラウザUI | 5.1, 5.3, 5.6, 6.1-6.6 | Socket.IO Client (P0) | State |
+| MobileUI | Frontend/Mobile | Flutter実装のモバイルアプリUI | 5.2, 5.3, 6.1-6.6 | socket_io_client (P0) | State |
 
 ### Backend / HTTP層
 
@@ -282,18 +259,17 @@ sequenceDiagram
 
 | Field | Detail |
 |-------|--------|
-| Intent | HTTPエンドポイントの提供（ヘルスチェック、メトリクス、将来的なREST API等） |
+| Intent | HTTPエンドポイントの提供（ヘルスチェック、API） |
 | Requirements | - |
 
 **Responsibilities & Constraints**
 - HTTPリクエストの受信と処理
 - ヘルスチェックエンドポイントの提供（`GET /health`）
-- Socket.IOサーバーと同一Node.jsサーバー上で並行動作
-- 将来的なREST APIエンドポイントの拡張基盤
+- Socket.IOサーバーと同一HTTPサーバー上で並行動作
 
 **Dependencies**
-- Inbound: クライアント（Webブラウザ、監視ツール等） — HTTPリクエスト (P1)
-- External: Node.js http.createServer — HTTPサーバー作成 (P0)
+- Inbound: クライアント — HTTPリクエスト (P1)
+- External: @hono/node-server — Node.js統合 (P0)
 
 **Contracts**: API [X]
 
@@ -301,12 +277,11 @@ sequenceDiagram
 
 | Method | Endpoint | Request | Response | Errors |
 |--------|----------|---------|----------|--------|
-| GET | /health | - | `{ status: 'ok', timestamp: string }` | 500 (サーバーエラー) |
+| GET | /health | - | `{ status: 'ok', timestamp: string }` | 500 |
 
 **Implementation Notes**
-- Integration: `http.createServer(app.fetch)`でNode.js HTTPサーバーを作成し、Socket.IOサーバーと共有
-- Validation: リクエストペイロードは必要に応じてバリデーション（現時点ではヘルスチェックのみ）
-- Risks: 特になし（シンプルな実装）
+- Integration: `node:http.createServer`でHTTPサーバーを作成し、Socket.IOと共有
+- Validation: リクエストペイロードは必要に応じてバリデーション
 
 ### Backend / WebSocket通信層
 
@@ -314,8 +289,8 @@ sequenceDiagram
 
 | Field | Detail |
 |-------|--------|
-| Intent | WebSocket接続の確立、切断、イベント受信とルーティングを担当 |
-| Requirements | 全要件（通信の中心点） |
+| Intent | WebSocket接続の確立、切断、イベント受信とルーティング |
+| Requirements | 全要件 |
 
 **Responsibilities & Constraints**
 - Socket.IOサーバーの初期化と接続管理
@@ -324,30 +299,24 @@ sequenceDiagram
 - 接続エラー、切断、再接続のハンドリング
 
 **Dependencies**
-- Inbound: WebUI, MobileUI — WebSocket接続とイベント送信 (P0)
-- Outbound: MatchingService — マッチングリクエスト処理 (P0)
-- Outbound: MessageService — メッセージ送受信処理 (P0)
+- Inbound: WebUI, MobileUI — WebSocket接続 (P0)
+- Outbound: MatchingService — マッチングリクエスト (P0)
+- Outbound: MessageService — メッセージ送受信 (P0)
 - Outbound: RoomManager — チャットルーム操作 (P0)
-- External: Socket.IO — WebSocket通信ライブラリ (P0)
+- External: Socket.IO v4.8.3 — WebSocket通信 (P0)
 
-**Contracts**: API [X] / Event [X]
-
-##### API Contract
-
-| Method | Endpoint | Request | Response | Errors |
-|--------|----------|---------|----------|--------|
-| WS | /socket.io/ | Socket.IO接続 | 接続確立 | 401 (認証失敗), 500 |
+**Contracts**: Event [X]
 
 ##### Event Contract
 
 **Published Events**:
-- `matchFound`: マッチング成立通知 `{ roomId: string, partnerId: string }`
-- `newMessage`: 新規メッセージ配信 `{ messageId: string, senderId: string, text: string, timestamp: Date }`
-- `messageDeleted`: メッセージ削除通知 `{ messageId: string }`
-- `roomClosed`: チャットルーム終了通知 `{ roomId: string, reason: string }`
-- `partnerDisconnected`: 相手の切断通知 `{ roomId: string }`
+- `matchFound`: マッチング成立 `{ roomId: string, partnerSessionId: string }`
+- `newMessage`: 新規メッセージ `{ messageId: string, senderSessionId: string, text: string, createdAt: Date }`
+- `messageDeleted`: メッセージ削除 `{ messageId: string }`
+- `roomClosed`: チャットルーム終了 `{ roomId: string, reason: 'timeout' | 'user_left' | 'reported' }`
+- `partnerDisconnected`: 相手切断 `{ roomId: string }`
 - `timerUpdate`: 残り時間更新 `{ roomId: string, remainingSeconds: number }`
-- `error`: エラー通知 `{ code: string, message: string }`
+- `error`: エラー `{ code: string, message: string }`
 
 **Subscribed Events**:
 - `requestMatch`: マッチングリクエスト `{}`
@@ -356,14 +325,24 @@ sequenceDiagram
 - `reportContent`: 不適切コンテンツ報告 `{ roomId: string, reason: string }`
 
 **Ordering / Delivery Guarantees**:
-- メッセージ送信順序はSocket.IOのTCP保証に依存（同一接続内で順序保証）
+- メッセージ送信順序はSocket.IOのTCP保証に依存
 - room内ブロードキャストは全参加者に配信保証
-- 切断時は再接続まで未配信イベントはバッファリングされない（リアルタイム性優先）
 
 **Implementation Notes**
-- Integration: HonoサーバーとSocket.IOサーバーを並行動作させる。Honoは通常のHTTPエンドポイント（ヘルスチェック、API等）を処理し、Socket.IOはWebSocketリアルタイム通信を処理。Node.js環境で両者を統合可能
-- Validation: イベントペイロードは受信時にバリデーション（型チェック、必須フィールド確認）
-- Risks: 大量同時接続時のメモリ消費に注意。将来的にRedis Adapterでスケール
+- Integration: HonoサーバーとSocket.IOサーバーを共有HTTPサーバー上で並行動作
+- Validation: イベントペイロードは受信時にZodスキーマで検証
+  - 例: `sendMessage`イベント受信時
+    ```typescript
+    socket.on('sendMessage', (data) => {
+      const result = validatePayload(SendMessageSchema, data);
+      if (result.isErr()) {
+        socket.emit('error', { code: 'VALIDATION_ERROR', message: result.error.message });
+        return;
+      }
+      const payload = result.value; // 型安全なペイロード
+      // ... 処理続行
+    });
+    ```
 
 ### Backend / ドメインロジック層
 
@@ -371,225 +350,184 @@ sequenceDiagram
 
 | Field | Detail |
 |-------|--------|
-| Intent | ユーザーマッチングキュー管理とペアリングロジック実行 |
+| Intent | ユーザーマッチングキュー管理とペアリングロジック |
 | Requirements | 1.1, 1.2, 1.3, 1.4, 5.5 |
 
 **Responsibilities & Constraints**
 - マッチング待機キュー（Redis）への登録と取り出し
 - FIFOアルゴリズムによる2ユーザーのペアリング
-- マッチング成立時のRoomManager呼び出しとチャットルーム作成
-- 匿名識別子（SessionManager）による完全匿名マッチング
+- マッチング成立時のRoomManager呼び出し
 
 **Dependencies**
-- Inbound: WebSocketGateway — マッチングリクエスト受信 (P0)
-- Outbound: RoomManager — チャットルーム作成依頼 (P0)
+- Inbound: WebSocketGateway — マッチングリクエスト (P0)
+- Outbound: RoomManager — チャットルーム作成 (P0)
 - Outbound: SessionManager — 匿名識別子取得 (P0)
-- External: Redis — 待機キューストレージ (P0)
+- External: Redis (ioredis) — 待機キュー (P0)
 
-**Contracts**: Service [X] / Event [X]
+**Contracts**: Service [X]
 
 ##### Service Interface
 
 ```typescript
+import { Result } from 'neverthrow';
+import { SessionId, RoomId } from '../domain/types/valueObjects';
+import { ActiveChatRoom } from '../domain/entities/chatRoom';
+import { MatchFoundEvent } from '../domain/events';
+
 interface MatchingServiceInterface {
-  enqueueUser(sessionId: string): Promise<Result<void, MatchingError>>;
-  dequeueUser(sessionId: string): Promise<Result<void, MatchingError>>;
-  tryMatch(): Promise<Result<MatchResult, MatchingError>>;
+  enqueueUser(sessionId: SessionId): Promise<Result<void, MatchingError>>;
+  dequeueUser(sessionId: SessionId): Promise<Result<void, MatchingError>>;
+  tryMatch(): Promise<Result<MatchResult | null, MatchingError>>;
 }
 
 interface MatchResult {
-  user1SessionId: string;
-  user2SessionId: string;
-  roomId: string;
+  user1SessionId: SessionId;
+  user2SessionId: SessionId;
+  room: ActiveChatRoom;
+  event: MatchFoundEvent;
 }
 
 type MatchingError =
   | { type: 'QUEUE_ERROR'; message: string }
-  | { type: 'ROOM_CREATION_FAILED'; message: string };
+  | { type: 'ROOM_CREATION_FAILED'; message: string }
+  | { type: 'ALREADY_IN_QUEUE'; sessionId: SessionId };
 ```
 
-**Preconditions**:
-- `sessionId`は有効なセッション識別子
-- Redisキューが利用可能
-
-**Postconditions**:
-- `enqueueUser`: ユーザーが待機キューに追加される
-- `tryMatch`: 2ユーザーがマッチした場合、チャットルームが作成され、両者に通知される
-
-**Invariants**:
-- 同一ユーザーが複数回キューに登録されない
-- マッチング成立後、両ユーザーはキューから削除される
-
-##### Event Contract
-
-**Published Events**:
-- `matchFound`: マッチング成立 `{ user1SessionId: string, user2SessionId: string, roomId: string }`
-
-**Subscribed Events**:
-- `requestMatch`: マッチングリクエスト `{ sessionId: string }`
-
 **Implementation Notes**
-- Integration: Redisの`LPUSH`と`RPOP`でアトミックなキュー操作を実現
-- Validation: セッションIDの形式チェック、重複登録防止
-- Risks: キュー内ユーザーが奇数の場合、1ユーザーが待機状態。タイムアウト機構を将来検討
+- Integration: Redis LPUSH/RPOPでアトミックキュー操作
+- Validation: SessionIdファクトリ関数でバリデーション済み
 
 #### RoomManager
 
 | Field | Detail |
 |-------|--------|
-| Intent | チャットルームのライフサイクル管理（作成、タイマー、終了） |
+| Intent | チャットルームのライフサイクル管理 |
 | Requirements | 2.1, 2.2, 2.3, 2.4, 2.5, 6.1 |
 
 **Responsibilities & Constraints**
-- チャットルームの作成とMongoDBへの永続化
+- チャットルームの作成とSupabaseへの永続化
 - 10分タイマーの開始と残り時間の定期配信
 - タイマー終了時の全メッセージ削除とルームクローズ
-- ユーザー途中退出の検知と相手への通知
+- ユーザー途中退出の検知と通知
+- サーバー再起動時のタイマー復元
 
 **Dependencies**
-- Inbound: MatchingService — チャットルーム作成リクエスト (P0)
+- Inbound: MatchingService — チャットルーム作成 (P0)
 - Inbound: WebSocketGateway — ユーザー切断通知 (P0)
-- Outbound: MessageService — メッセージ一括削除依頼 (P1)
-- External: MongoDB — チャットルーム状態永続化 (P0)
+- Outbound: MessageService — メッセージ削除 (P1)
+- External: Supabase (Drizzle ORM) — データ永続化 (P0)
+- External: Redis (ioredis) — タイマー永続化 (P0)
 
 **Contracts**: Service [X] / State [X]
 
 ##### Service Interface
 
 ```typescript
-interface RoomManagerInterface {
-  createRoom(user1SessionId: string, user2SessionId: string): Promise<Result<Room, RoomError>>;
-  closeRoom(roomId: string, reason: RoomCloseReason): Promise<Result<void, RoomError>>;
-  getRoomStatus(roomId: string): Promise<Result<RoomStatus, RoomError>>;
-  handleUserDisconnect(sessionId: string, roomId: string): Promise<Result<void, RoomError>>;
-}
+import { Result } from 'neverthrow';
+import { RoomId, SessionId } from '../domain/types/valueObjects';
+import { ChatRoom, ActiveChatRoom, ClosedChatRoom, RoomCloseReason } from '../domain/entities/chatRoom';
+import { RoomClosedEvent } from '../domain/events';
 
-interface Room {
-  roomId: string;
-  user1SessionId: string;
-  user2SessionId: string;
-  createdAt: Date;
-  expiresAt: Date;
-  status: 'active' | 'closed';
+interface RoomManagerInterface {
+  createRoom(user1SessionId: SessionId, user2SessionId: SessionId): Promise<Result<ActiveChatRoom, RoomError>>;
+  closeRoom(roomId: RoomId, reason: RoomCloseReason): Promise<Result<RoomClosedEvent, RoomError>>;
+  getRoom(roomId: RoomId): Promise<Result<ChatRoom, RoomError>>;
+  getRoomStatus(roomId: RoomId): Promise<Result<RoomStatus, RoomError>>;
+  handleUserDisconnect(sessionId: SessionId, roomId: RoomId): Promise<Result<RoomClosedEvent, RoomError>>;
+  restoreActiveTimers(): Promise<Result<RestoredTimer[], RoomError>>;
 }
 
 interface RoomStatus {
-  roomId: string;
+  roomId: RoomId;
   remainingSeconds: number;
-  status: 'active' | 'closed';
+  isActive: boolean;
 }
 
-type RoomCloseReason = 'timeout' | 'user_left' | 'reported';
+interface RestoredTimer {
+  roomId: RoomId;
+  remainingSeconds: number;
+  restored: boolean;
+}
 
 type RoomError =
-  | { type: 'ROOM_NOT_FOUND'; roomId: string }
-  | { type: 'ROOM_ALREADY_CLOSED'; roomId: string }
-  | { type: 'DATABASE_ERROR'; message: string };
+  | { type: 'ROOM_NOT_FOUND'; roomId: RoomId }
+  | { type: 'ROOM_ALREADY_CLOSED'; roomId: RoomId }
+  | { type: 'DATABASE_ERROR'; message: string }
+  | { type: 'REDIS_ERROR'; message: string };
 ```
-
-**Preconditions**:
-- `createRoom`: 両セッションIDが有効
-- `closeRoom`: ルームIDが存在し、まだクローズされていない
-
-**Postconditions**:
-- `createRoom`: チャットルームがMongoDBに保存され、10分タイマーが開始される
-- `closeRoom`: チャットルームステータスが`closed`に更新され、全メッセージが削除される
-
-**Invariants**:
-- 1つのチャットルームには常に2ユーザーのみ参加
-- タイマー終了後は新規メッセージ送信不可
 
 ##### State Management
 
 **State Model**:
-- チャットルーム状態: `active`（有効）、`closed`（終了）
-- タイマー状態: Node.jsの`setTimeout`でタイマー管理、残り時間を1分ごとにブロードキャスト
+- チャットルーム状態: `active`, `closed`
+- タイマー状態: `setTimeout`で管理、残り時間を1分ごとにブロードキャスト
+- タイマー永続化: Redisに`room:timer:{roomId}`をHash型で保存
 
 **Persistence & Consistency**:
-- MongoDBにチャットルーム情報を永続化
-- ステータス更新はアトミック操作で実行
-
-**Concurrency Strategy**:
-- 同一ルームへの複数操作はMongoDB楽観的ロックで制御
-- タイマー終了とユーザー退出が同時発生した場合、先行操作が優先
+- Supabaseにチャットルーム情報を永続化
+- Drizzle ORMでトランザクション管理
+- Redisにタイマー情報を永続化（`expiresAt`タイムスタンプ）
 
 **Implementation Notes**
-- Integration: チャットルーム作成時にMongoDBに`INSERT`、タイマーは`setTimeout`で管理
-- Validation: ルームIDの存在確認、ステータス遷移の妥当性チェック
-- Risks: サーバー再起動時にアクティブなタイマーが失われる。将来的に永続タイマー（Redis/MongoDB）を検討
+- Integration:
+  - Drizzle ORMでINSERT/UPDATE
+  - タイマーはsetTimeoutで管理
+  - Redis統合でタイマー永続化を実現
+    - ルーム作成時: `HSET room:timer:{roomId} expiresAt {timestamp}` + `EXPIRE room:timer:{roomId} 600`
+    - サーバー起動時: `KEYS room:timer:*`で全タイマーを取得し、`setTimeout`を復元
+    - ルーム終了時: `DEL room:timer:{roomId}`でタイマー情報を削除
+- Failsafe: pg_cronが1分ごとに期限切れルームをクリーンアップ（バックアップ機構）
 
 #### MessageService
 
 | Field | Detail |
 |-------|--------|
-| Intent | メッセージ送受信、自動削除ロジック、永続化 |
+| Intent | メッセージ送受信、自動削除ロジック |
 | Requirements | 3.1, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5 |
 
 **Responsibilities & Constraints**
-- テキストメッセージのバリデーションと送信
-- メッセージのMongoDB永続化（送信時刻、送信者識別子付与）
+- テキストメッセージのバリデーションと保存
 - 各ユーザーの送信メッセージカウントと古いメッセージの自動削除
 - チャットルーム終了時の全メッセージ一括削除
 
 **Dependencies**
-- Inbound: WebSocketGateway — メッセージ送信リクエスト (P0)
-- Inbound: RoomManager — 全メッセージ削除依頼 (P1)
-- Outbound: WebSocketGateway — メッセージ配信とブロードキャスト (P0)
-- External: MongoDB — メッセージ永続化 (P0)
+- Inbound: WebSocketGateway — メッセージ送信 (P0)
+- Inbound: RoomManager — 全メッセージ削除 (P1)
+- Outbound: WebSocketGateway — メッセージ配信 (P0)
+- External: Supabase (Drizzle ORM) — データ永続化 (P0)
 
-**Contracts**: Service [X] / Event [X]
+**Contracts**: Service [X]
 
 ##### Service Interface
 
 ```typescript
+import { Result } from 'neverthrow';
+import { RoomId, SessionId, MessageId, MessageText } from '../domain/types/valueObjects';
+import { Message } from '../domain/entities/message';
+import { MessageSentEvent, MessageDeletedEvent } from '../domain/events';
+
 interface MessageServiceInterface {
-  sendMessage(sessionId: string, roomId: string, text: string): Promise<Result<Message, MessageError>>;
-  deleteOldMessages(sessionId: string, roomId: string): Promise<Result<string[], MessageError>>;
-  deleteAllMessages(roomId: string): Promise<Result<void, MessageError>>;
-  getRecentMessages(roomId: string, limit: number): Promise<Result<Message[], MessageError>>;
+  sendMessage(sessionId: SessionId, roomId: RoomId, text: MessageText): Promise<Result<SendMessageResult, MessageError>>;
+  deleteOldMessages(sessionId: SessionId, roomId: RoomId): Promise<Result<MessageDeletedEvent[], MessageError>>;
+  deleteAllMessages(roomId: RoomId): Promise<Result<void, MessageError>>;
+  getMessages(roomId: RoomId): Promise<Result<Message[], MessageError>>;
 }
 
-interface Message {
-  messageId: string;
-  roomId: string;
-  senderSessionId: string;
-  text: string;
-  createdAt: Date;
+interface SendMessageResult {
+  message: Message;
+  event: MessageSentEvent;
+  deletedMessages: MessageDeletedEvent[];
 }
 
 type MessageError =
-  | { type: 'INVALID_TEXT'; message: string }
-  | { type: 'ROOM_CLOSED'; roomId: string }
-  | { type: 'MESSAGE_TOO_LONG'; maxLength: number }
+  | { type: 'ROOM_NOT_FOUND'; roomId: RoomId }
+  | { type: 'ROOM_CLOSED'; roomId: RoomId }
   | { type: 'DATABASE_ERROR'; message: string };
 ```
 
-**Preconditions**:
-- `sendMessage`: テキストが1文字以上、最大文字数以内（例: 500文字）
-- `sendMessage`: チャットルームが`active`状態
-
-**Postconditions**:
-- `sendMessage`: メッセージがMongoDBに保存され、ルーム内全参加者にブロードキャスト
-- `deleteOldMessages`: 送信者の4件目以降のメッセージがMongoDBから削除され、削除IDが返される
-- `deleteAllMessages`: 指定ルームの全メッセージがMongoDBから完全削除される
-
-**Invariants**:
-- 各ユーザーの表示メッセージは最新3件まで（4件目送信時に最古削除）
-- 削除されたメッセージはデータベースに残らない
-
-##### Event Contract
-
-**Published Events**:
-- `newMessage`: 新規メッセージ配信 `{ messageId: string, senderSessionId: string, text: string, createdAt: Date }`
-- `messageDeleted`: メッセージ削除通知 `{ messageId: string }`
-
-**Subscribed Events**:
-- `sendMessage`: メッセージ送信リクエスト `{ roomId: string, text: string }`
-
 **Implementation Notes**
-- Integration: メッセージ送信と削除判定を同一処理内で実行し、整合性を保証
-- Validation: テキスト形式チェック（HTMLタグ除去、特殊文字エスケープ）、文字数制限
-- Risks: 同時メッセージ送信時の削除タイミングが競合する可能性。MongoDBトランザクション使用で対処
+- Integration: Drizzle ORMでINSERT/DELETE、トランザクションで整合性保証
+- Validation: MessageTextファクトリ関数でバリデーション済み（1-500文字、HTMLタグ除去）
 
 #### SessionManager
 
@@ -600,96 +538,70 @@ type MessageError =
 
 **Responsibilities & Constraints**
 - WebSocket接続時に一意の匿名セッションIDを生成
-- セッションIDと接続情報の紐付け管理
 - 個人情報を一切収集しない
 
 **Dependencies**
-- Inbound: WebSocketGateway — セッション生成リクエスト (P0)
-- External: なし
+- Inbound: WebSocketGateway — セッション生成 (P0)
 
 **Contracts**: Service [X]
 
 ##### Service Interface
 
 ```typescript
-interface SessionManagerInterface {
-  generateSession(): SessionInfo;
-  getSession(sessionId: string): Result<SessionInfo, SessionError>;
-  invalidateSession(sessionId: string): Result<void, SessionError>;
-}
+import { Result } from 'neverthrow';
+import { SessionId, SocketId } from '../domain/types/valueObjects';
+import { Session } from '../domain/entities/session';
 
-interface SessionInfo {
-  sessionId: string;
-  createdAt: Date;
-  socketId: string;
+interface SessionManagerInterface {
+  generateSession(socketId: SocketId): Session;
+  getSession(sessionId: SessionId): Result<Session, SessionError>;
+  invalidateSession(sessionId: SessionId): Result<void, SessionError>;
+  bindSocketToSession(sessionId: SessionId, socketId: SocketId): Result<void, SessionError>;
 }
 
 type SessionError =
-  | { type: 'SESSION_NOT_FOUND'; sessionId: string }
-  | { type: 'SESSION_EXPIRED'; sessionId: string };
+  | { type: 'SESSION_NOT_FOUND'; sessionId: SessionId }
+  | { type: 'SESSION_EXPIRED'; sessionId: SessionId }
+  | { type: 'SOCKET_ALREADY_BOUND'; socketId: SocketId };
 ```
-
-**Preconditions**:
-- `generateSession`: WebSocket接続が確立済み
-
-**Postconditions**:
-- `generateSession`: 一意のセッションIDが生成され、返却される
-- `invalidateSession`: セッションIDが無効化される
-
-**Invariants**:
-- セッションIDは衝突しない（UUID v4使用）
-- 個人情報（名前、メールアドレス等）は一切保持しない
 
 **Implementation Notes**
 - Integration: UUID v4でセッションID生成、メモリまたはRedisで管理
-- Validation: セッションIDの形式チェック
-- Risks: メモリ管理の場合、サーバー再起動でセッション消失。Redis使用で永続化検討
+- SessionIdファクトリ関数でバリデーション済み
 
 #### ReportService
 
 | Field | Detail |
 |-------|--------|
-| Intent | 不適切コンテンツの報告受付と記録 |
+| Intent | 不適切コンテンツの報告受付 |
 | Requirements | 7.5 |
 
 **Responsibilities & Constraints**
-- ユーザーからの報告を受け付け、MongoDBに記録
-- 報告内容の分類（スパム、ハラスメント等）
-- 将来的なAIベースのモデレーション機能拡張の基盤
+- ユーザーからの報告を受け付け、Supabaseに記録
 
 **Dependencies**
-- Inbound: WebSocketGateway — 報告リクエスト受信 (P0)
-- External: MongoDB — 報告ログ保存 (P0)
+- Inbound: WebSocketGateway — 報告リクエスト (P0)
+- External: Supabase (Drizzle ORM) — 報告ログ保存 (P0)
 
 **Contracts**: Service [X]
 
 ##### Service Interface
 
 ```typescript
+import { Result } from 'neverthrow';
+import { RoomId, SessionId, ReportReason } from '../domain/types/valueObjects';
+import { Report } from '../domain/entities/report';
+
 interface ReportServiceInterface {
-  submitReport(sessionId: string, roomId: string, reason: ReportReason): Promise<Result<void, ReportError>>;
+  submitReport(sessionId: SessionId, roomId: RoomId, reason: ReportReason): Promise<Result<Report, ReportError>>;
+  getReportsByRoom(roomId: RoomId): Promise<Result<Report[], ReportError>>;
 }
 
-type ReportReason = 'spam' | 'harassment' | 'inappropriate_content' | 'other';
-
 type ReportError =
-  | { type: 'INVALID_REASON'; reason: string }
+  | { type: 'ROOM_NOT_FOUND'; roomId: RoomId }
+  | { type: 'ALREADY_REPORTED'; sessionId: SessionId; roomId: RoomId }
   | { type: 'DATABASE_ERROR'; message: string };
 ```
-
-**Preconditions**:
-- 報告理由が定義されたカテゴリ内
-
-**Postconditions**:
-- 報告がMongoDBに記録される
-
-**Invariants**:
-- 報告は削除されず、監査ログとして保持
-
-**Implementation Notes**
-- Integration: 報告受信時にMongoDBに`INSERT`、将来的に報告頻度の高いユーザーをブロック
-- Validation: 報告理由の妥当性チェック
-- Risks: 悪意ある大量報告。レート制限機構を将来導入
 
 ### Frontend / Web UI層
 
@@ -697,20 +609,18 @@ type ReportError =
 
 | Field | Detail |
 |-------|--------|
-| Intent | Webブラウザ版ユーザーインターフェース実装 |
+| Intent | Webブラウザ版ユーザーインターフェース |
 | Requirements | 5.1, 5.3, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 |
 
 **Responsibilities & Constraints**
-- WebSocket接続管理とSocket.IOクライアント統合
+- WebSocket接続管理
 - チャット画面UI（メッセージ一覧、入力フィールド、送信ボタン）
 - 残り時間カウントダウン表示
-- 自分/相手メッセージの視覚的区別
-- リアルタイムメッセージ更新とスクロール制御
-- レスポンシブデザイン（モバイル、タブレット、デスクトップ）
+- レスポンシブデザイン
 
 **Dependencies**
-- Outbound: WebSocketGateway — メッセージ送受信とイベント受信 (P0)
-- External: socket.io-client — WebSocket通信ライブラリ (P0)
+- Outbound: WebSocketGateway — メッセージ送受信 (P0)
+- External: socket.io-client v4.8.3 — WebSocket通信 (P0)
 - External: Svelte Store — 状態管理 (P0)
 
 **Contracts**: State [X]
@@ -718,21 +628,9 @@ type ReportError =
 ##### State Management
 
 **State Model**:
-- `chatStore`: チャットルーム状態（roomId, 相手セッションID, 残り時間）
-- `messageStore`: メッセージ一覧（配列、最新順）
-- `connectionStore`: WebSocket接続状態（connected, disconnected, reconnecting）
-
-**Persistence & Consistency**:
-- 状態はメモリ上のSvelteストアで管理（永続化なし）
-- WebSocket再接続時に状態を再同期
-
-**Concurrency Strategy**:
-- Svelte Storeのリアクティブ性により、状態更新は自動的にUIに反映
-
-**Implementation Notes**
-- Integration: Socket.IOクライアントをSvelteストアでラップし、コンポーネント間で共有
-- Validation: 入力テキストのクライアント側バリデーション（文字数制限、空白チェック）
-- Risks: WebSocket切断時のユーザー体験。再接続中の明確な表示が必要
+- `chatStore`: チャットルーム状態
+- `messageStore`: メッセージ一覧
+- `connectionStore`: WebSocket接続状態
 
 ### Frontend / Mobile UI層
 
@@ -740,663 +638,1085 @@ type ReportError =
 
 | Field | Detail |
 |-------|--------|
-| Intent | iOS/Androidモバイルアプリ版ユーザーインターフェース実装 |
+| Intent | iOS/Androidモバイルアプリ版UI |
 | Requirements | 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 |
 
 **Responsibilities & Constraints**
-- WebSocket接続管理とsocket_io_clientパッケージ統合
-- チャット画面UI（メッセージ一覧、入力フィールド、送信ボタン）
-- 残り時間カウントダウン表示
-- 自分/相手メッセージの視覚的区別
-- リアルタイムメッセージ更新とスクロール制御
+- WebSocket接続管理
+- チャット画面UI
 - iOS/Androidネイティブ対応
 
 **Dependencies**
-- Outbound: WebSocketGateway — メッセージ送受信とイベント受信 (P0)
-- External: socket_io_client — WebSocket通信パッケージ (P0)
-- External: Riverpod — 状態管理パッケージ (P0)
+- Outbound: WebSocketGateway — メッセージ送受信 (P0)
+- External: socket_io_client — WebSocket通信 (P0)
+- External: Riverpod — 状態管理 (P0)
 
 **Contracts**: State [X]
 
 ##### State Management
 
 **State Model**:
-- `chatRoomProvider`: チャットルーム状態（roomId, 相手セッションID, 残り時間）
-- `messageListProvider`: メッセージ一覧（List、最新順）
-- `connectionStateProvider`: WebSocket接続状態（enum: connected, disconnected, reconnecting）
-
-**Persistence & Consistency**:
-- 状態はメモリ上のRiverpodプロバイダーで管理（永続化なし）
-- WebSocket再接続時に状態を再同期
-
-**Concurrency Strategy**:
-- Riverpodのリアクティブ性により、状態更新は自動的にUIに反映
-- 非同期操作はIsolatesで処理（メインスレッドブロック回避）
-
-**Implementation Notes**
-- Integration: socket_io_clientをRiverpodプロバイダーでラップし、ウィジェット間で共有
-- Validation: 入力テキストのクライアント側バリデーション（文字数制限、空白チェック）
-- Risks: モバイルネットワーク不安定時の再接続ロジック。指数バックオフ+ジッターで対処
+- `chatRoomProvider`: チャットルーム状態
+- `messageListProvider`: メッセージ一覧
+- `connectionStateProvider`: WebSocket接続状態
 
 ## Data Models
 
 ### Domain Model
 
 **Aggregates & Transactional Boundaries**:
-- **ChartRoomAggregate**: チャットルームとその中のメッセージ群を1つの集約として扱う
-  - ルート: ChatRoom
-  - エンティティ: Message（複数）
-  - トランザクション境界: チャットルーム作成、メッセージ送信、ルーム終了時の削除
-- **MatchingQueueAggregate**: 待機中ユーザーのキュー
-  - ルート: WaitingQueue
-  - 値オブジェクト: SessionId
-  - トランザクション境界: キュー追加、マッチング実行
+- **ChatRoomAggregate**: チャットルームとメッセージ群を1つの集約として管理
+- **MatchingQueueAggregate**: 待機中ユーザーのキュー（Redis管理）
 
-**Entities, Value Objects, Domain Events**:
-- **エンティティ**:
-  - ChatRoom: チャットルームの状態管理
-  - Message: 個別メッセージ
-  - Report: 報告ログ
-- **値オブジェクト**:
-  - SessionId: 匿名セッション識別子
-  - MessageText: メッセージテキスト（バリデーション付き）
-  - Timestamp: 時刻情報
-- **ドメインイベント**:
-  - `MatchFound`: マッチング成立
-  - `MessageSent`: メッセージ送信
-  - `MessageDeleted`: メッセージ削除
-  - `RoomClosed`: チャットルーム終了
+**Entities & Value Objects**:
+- **Entity**: ChatRoom, Message, Report
+- **Value Object**: RoomId, SessionId, MessageId, MessageText, ReportReason
 
 **Business Rules & Invariants**:
 - チャットルームは常に2ユーザーのみ参加
 - 各ユーザーの表示メッセージは最新3件まで
 - チャットルーム有効期間は10分間
-- メッセージはテキストのみ（画像、動画不可）
-- 匿名性保護のため個人情報は一切保存しない
+- メッセージはテキストのみ（500文字以内）
+
+### Type Definitions
+
+**設計原則**: 型で仕様とワークフローをモデリングし、実装はその後に行う
+
+#### 基盤定義
+
+```typescript
+// backend/src/domain/types/base.ts
+import { ok, err, Result } from 'neverthrow';
+
+declare const brand: unique symbol;
+export type Newtype<K extends string, T> = T & { [brand]: K };
+
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+```
+
+#### 値オブジェクト
+
+```typescript
+// backend/src/domain/types/valueObjects.ts
+import { ok, err, Result } from 'neverthrow';
+import { Newtype, ValidationError } from './base';
+
+// --- RoomId ---
+export type RoomId = Newtype<'RoomId', string>;
+
+export function RoomId(value: string): Result<RoomId, ValidationError> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value)
+    ? ok(value as RoomId)
+    : err(new ValidationError('RoomIdはUUID v4形式である必要があります'));
+}
+
+// --- SessionId ---
+export type SessionId = Newtype<'SessionId', string>;
+
+export function SessionId(value: string): Result<SessionId, ValidationError> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value)
+    ? ok(value as SessionId)
+    : err(new ValidationError('SessionIdはUUID v4形式である必要があります'));
+}
+
+// --- MessageId ---
+export type MessageId = Newtype<'MessageId', string>;
+
+export function MessageId(value: string): Result<MessageId, ValidationError> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value)
+    ? ok(value as MessageId)
+    : err(new ValidationError('MessageIdはUUID v4形式である必要があります'));
+}
+
+// --- MessageText ---
+export type MessageText = Newtype<'MessageText', string>;
+
+const MAX_MESSAGE_LENGTH = 500;
+
+export function MessageText(value: string): Result<MessageText, ValidationError> {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return err(new ValidationError('メッセージは空にできません'));
+  }
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    return err(new ValidationError(`メッセージは${MAX_MESSAGE_LENGTH}文字以内である必要があります`));
+  }
+  // HTMLタグ除去
+  const sanitized = trimmed.replace(/<[^>]*>/g, '');
+  return ok(sanitized as MessageText);
+}
+
+// --- ReportReason ---
+export type ReportReason = 'spam' | 'harassment' | 'inappropriate_content' | 'other';
+
+export function ReportReason(value: string): Result<ReportReason, ValidationError> {
+  const validReasons: ReportReason[] = ['spam', 'harassment', 'inappropriate_content', 'other'];
+  return validReasons.includes(value as ReportReason)
+    ? ok(value as ReportReason)
+    : err(new ValidationError('無効な報告理由です'));
+}
+
+// --- SocketId ---
+export type SocketId = Newtype<'SocketId', string>;
+
+export function SocketId(value: string): Result<SocketId, ValidationError> {
+  return value.length > 0
+    ? ok(value as SocketId)
+    : err(new ValidationError('SocketIdが不正です'));
+}
+```
+
+#### エンティティ（Union型による状態表現）
+
+```typescript
+// backend/src/domain/entities/chatRoom.ts
+import { RoomId, SessionId } from '../types/valueObjects';
+
+// --- ChatRoom: Union型で状態を表現 ---
+export type ChatRoom = ActiveChatRoom | ClosedChatRoom;
+
+interface _ChatRoom {
+  id: RoomId;
+  user1SessionId: SessionId;
+  user2SessionId: SessionId;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export interface ActiveChatRoom extends _ChatRoom {
+  status: 'active';
+}
+
+export interface ClosedChatRoom extends _ChatRoom {
+  status: 'closed';
+  closedAt: Date;
+  closeReason: RoomCloseReason;
+}
+
+export type RoomCloseReason = 'timeout' | 'user_left' | 'reported';
+
+// --- ファクトリ関数 ---
+export function createActiveChatRoom(
+  id: RoomId,
+  user1SessionId: SessionId,
+  user2SessionId: SessionId,
+  createdAt: Date,
+  expiresAt: Date
+): ActiveChatRoom {
+  return {
+    id,
+    user1SessionId,
+    user2SessionId,
+    createdAt,
+    expiresAt,
+    status: 'active',
+  };
+}
+
+export function closeChatRoom(
+  room: ActiveChatRoom,
+  reason: RoomCloseReason
+): ClosedChatRoom {
+  return {
+    ...room,
+    status: 'closed',
+    closedAt: new Date(),
+    closeReason: reason,
+  };
+}
+```
+
+```typescript
+// backend/src/domain/entities/message.ts
+import { MessageId, RoomId, SessionId, MessageText } from '../types/valueObjects';
+
+export interface Message {
+  id: MessageId;
+  roomId: RoomId;
+  senderSessionId: SessionId;
+  text: MessageText;
+  createdAt: Date;
+}
+
+export function createMessage(
+  id: MessageId,
+  roomId: RoomId,
+  senderSessionId: SessionId,
+  text: MessageText,
+  createdAt: Date
+): Message {
+  return { id, roomId, senderSessionId, text, createdAt };
+}
+```
+
+```typescript
+// backend/src/domain/entities/report.ts
+import { RoomId, SessionId, ReportReason } from '../types/valueObjects';
+import { Newtype, ValidationError } from '../types/base';
+import { ok, err, Result } from 'neverthrow';
+
+export type ReportId = Newtype<'ReportId', string>;
+
+export function ReportId(value: string): Result<ReportId, ValidationError> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value)
+    ? ok(value as ReportId)
+    : err(new ValidationError('ReportIdはUUID v4形式である必要があります'));
+}
+
+export interface Report {
+  id: ReportId;
+  roomId: RoomId;
+  reporterSessionId: SessionId;
+  reason: ReportReason;
+  createdAt: Date;
+}
+
+export function createReport(
+  id: ReportId,
+  roomId: RoomId,
+  reporterSessionId: SessionId,
+  reason: ReportReason,
+  createdAt: Date
+): Report {
+  return { id, roomId, reporterSessionId, reason, createdAt };
+}
+```
+
+```typescript
+// backend/src/domain/entities/session.ts
+import { SessionId, SocketId, RoomId } from '../types/valueObjects';
+
+export interface Session {
+  sessionId: SessionId;
+  socketId: SocketId;
+  createdAt: Date;
+}
+
+// --- マッチング状態: Union型で表現 ---
+export type MatchingStatus = Waiting | Matched;
+
+export interface Waiting {
+  status: 'waiting';
+  sessionId: SessionId;
+  enqueuedAt: Date;
+}
+
+export interface Matched {
+  status: 'matched';
+  sessionId: SessionId;
+  roomId: RoomId;
+  matchedAt: Date;
+}
+
+// --- ファクトリ関数 ---
+export function createSession(
+  sessionId: SessionId,
+  socketId: SocketId,
+  createdAt: Date
+): Session {
+  return { sessionId, socketId, createdAt };
+}
+
+export function createWaiting(
+  sessionId: SessionId,
+  enqueuedAt: Date
+): Waiting {
+  return { status: 'waiting', sessionId, enqueuedAt };
+}
+
+export function createMatched(
+  sessionId: SessionId,
+  roomId: RoomId,
+  matchedAt: Date
+): Matched {
+  return { status: 'matched', sessionId, roomId, matchedAt };
+}
+```
+
+#### ドメインイベント
+
+```typescript
+// backend/src/domain/events/index.ts
+import { RoomId, SessionId, MessageId, MessageText, ReportReason } from '../types/valueObjects';
+
+export type DomainEvent =
+  | MatchFoundEvent
+  | MessageSentEvent
+  | MessageDeletedEvent
+  | RoomClosedEvent
+  | PartnerDisconnectedEvent;
+
+export interface MatchFoundEvent {
+  type: 'MatchFound';
+  roomId: RoomId;
+  user1SessionId: SessionId;
+  user2SessionId: SessionId;
+  occurredAt: Date;
+}
+
+export interface MessageSentEvent {
+  type: 'MessageSent';
+  messageId: MessageId;
+  roomId: RoomId;
+  senderSessionId: SessionId;
+  text: MessageText;
+  occurredAt: Date;
+}
+
+export interface MessageDeletedEvent {
+  type: 'MessageDeleted';
+  messageId: MessageId;
+  roomId: RoomId;
+  occurredAt: Date;
+}
+
+export interface RoomClosedEvent {
+  type: 'RoomClosed';
+  roomId: RoomId;
+  reason: 'timeout' | 'user_left' | 'reported';
+  occurredAt: Date;
+}
+
+export interface PartnerDisconnectedEvent {
+  type: 'PartnerDisconnected';
+  roomId: RoomId;
+  disconnectedSessionId: SessionId;
+  occurredAt: Date;
+}
+```
+
+### ER Diagram
 
 ```mermaid
 erDiagram
-    ChatRoom ||--o{ Message : contains
-    ChatRoom {
-        string roomId PK
-        string user1SessionId
-        string user2SessionId
-        date createdAt
-        date expiresAt
-        string status
+    chat_rooms ||--o{ messages : contains
+    chat_rooms {
+        uuid id PK
+        text user1_session_id
+        text user2_session_id
+        timestamp created_at
+        timestamp expires_at
+        text status
+        timestamp closed_at
+        text close_reason
     }
-    Message {
-        string messageId PK
-        string roomId FK
-        string senderSessionId
-        string text
-        date createdAt
+    messages {
+        uuid id PK
+        uuid room_id FK
+        text sender_session_id
+        text text
+        timestamp created_at
     }
-    Report {
-        string reportId PK
-        string roomId
-        string reporterSessionId
-        string reason
-        date createdAt
-    }
-    WaitingQueue {
-        string sessionId
-        date enqueuedAt
+    reports {
+        uuid id PK
+        uuid room_id
+        text reporter_session_id
+        text reason
+        timestamp created_at
     }
 ```
-
-### Logical Data Model
-
-**Structure Definition**:
-- **ChatRoom**: 1対多でMessageと関連（1つのルームに複数メッセージ）
-- **Message**: 多対1でChatRoomと関連（外部キー: roomId）
-- **Report**: 多対1でChatRoomと関連（外部キー: roomId）
-- **WaitingQueue**: 独立したキューエントリ（Redisで管理）
-
-**Attributes & Types**:
-- ChatRoom.roomId: String (UUID v4)
-- ChatRoom.user1SessionId: String (UUID v4)
-- ChatRoom.user2SessionId: String (UUID v4)
-- ChatRoom.createdAt: Date
-- ChatRoom.expiresAt: Date
-- ChatRoom.status: Enum ('active', 'closed')
-- Message.messageId: String (UUID v4)
-- Message.roomId: String (FK to ChatRoom)
-- Message.senderSessionId: String
-- Message.text: String (max 500文字)
-- Message.createdAt: Date
-
-**Natural Keys & Identifiers**:
-- ChatRoom: roomId (Primary Key)
-- Message: messageId (Primary Key)
-- Report: reportId (Primary Key)
-
-**Referential Integrity Rules**:
-- Message.roomId → ChatRoom.roomId（参照整合性）
-- チャットルーム削除時にメッセージもカスケード削除
-
-**Consistency & Integrity**:
-- **Transaction Boundaries**: メッセージ送信と削除判定は同一トランザクション内で実行
-- **Cascading Rules**: ChatRoom削除時に関連Messageを全削除
-- **Temporal Aspects**: createdAtとexpiresAtでチャットルームの有効期間を管理
 
 ### Physical Data Model
 
-**For MongoDB (Document Store)**:
+**Drizzle Schema Definition**:
 
-**ChatRoomコレクション**:
 ```typescript
-interface ChatRoomDocument {
-  _id: string; // roomId (UUID v4)
-  user1SessionId: string;
-  user2SessionId: string;
-  createdAt: Date;
-  expiresAt: Date;
-  status: 'active' | 'closed';
-}
+// backend/src/db/schema.ts
+import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+
+export const chatRooms = pgTable('chat_rooms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user1SessionId: text('user1_session_id').notNull(),
+  user2SessionId: text('user2_session_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  status: text('status').notNull().default('active'),
+});
+
+export const messages = pgTable('messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => chatRooms.id, { onDelete: 'cascade' }),
+  senderSessionId: text('sender_session_id').notNull(),
+  text: text('text').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const reports = pgTable('reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull(),
+  reporterSessionId: text('reporter_session_id').notNull(),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const chatRoomsRelations = relations(chatRooms, ({ many }) => ({
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  room: one(chatRooms, { fields: [messages.roomId], references: [chatRooms.id] }),
+}));
 ```
 
 **Indexes**:
-- `_id`: Primary Index (デフォルト)
-- `expiresAt`: TTL Index (expireAfterSeconds: 0) — 期限切れルーム自動削除
-- `{ user1SessionId: 1 }`, `{ user2SessionId: 1 }`: ユーザー検索用
+- `chat_rooms`: Primary index on `id`
+- `messages`: Composite index on `(room_id, created_at DESC)`, index on `(room_id, sender_session_id, created_at DESC)`
+- `reports`: Index on `room_id`, index on `created_at`
 
-**Messageコレクション**:
-```typescript
-interface MessageDocument {
-  _id: string; // messageId (UUID v4)
-  roomId: string;
-  senderSessionId: string;
-  text: string;
-  createdAt: Date;
-}
+**pg_cron Cleanup Job**:
+```sql
+-- 期限切れチャットルームとメッセージの定期削除（1分ごと）
+SELECT cron.schedule('cleanup-expired-rooms', '* * * * *', $$
+  DELETE FROM messages WHERE room_id IN (
+    SELECT id FROM chat_rooms WHERE expires_at < NOW() AND status = 'active'
+  );
+  UPDATE chat_rooms SET status = 'closed' WHERE expires_at < NOW() AND status = 'active';
+$$);
 ```
-
-**Indexes**:
-- `_id`: Primary Index (デフォルト)
-- `{ roomId: 1, createdAt: -1 }`: ルーム内メッセージ取得用（最新順）
-- `{ roomId: 1, senderSessionId: 1, createdAt: -1 }`: ユーザー別メッセージカウント用
-- `createdAt`: TTL Index (expireAfterSeconds: 600) — 10分後自動削除（フェイルセーフ）
-
-**Reportコレクション**:
-```typescript
-interface ReportDocument {
-  _id: string; // reportId (UUID v4)
-  roomId: string;
-  reporterSessionId: string;
-  reason: 'spam' | 'harassment' | 'inappropriate_content' | 'other';
-  createdAt: Date;
-}
-```
-
-**Indexes**:
-- `_id`: Primary Index (デフォルト)
-- `{ roomId: 1 }`: ルーム別報告検索用
-- `{ createdAt: 1 }`: 時系列検索用
-
-**For Redis (Key-Value Store)**:
-
-**WaitingQueueキー**:
-- キー: `waiting_queue`
-- データ型: List（LPUSH/RPOPでFIFOキュー実現）
-- 値: SessionId（String）
-- TTL: 設定しない（マッチング成立時に削除）
-
-**SessionInfoキー**:
-- キー: `session:{sessionId}`
-- データ型: Hash
-- フィールド: `sessionId`, `createdAt`, `socketId`
-- TTL: 1時間（接続維持時間）
 
 ### Data Contracts & Integration
 
-**API Data Transfer**:
+**WebSocket Event Payloads**:
 
 ```typescript
-// WebSocket Event Payloads
-interface RequestMatchPayload {
-  // 空オブジェクト（セッションIDはWebSocket接続から取得）
-}
+// backend/src/domain/events/websocket.ts
+import { z } from 'zod';
 
-interface SendMessagePayload {
-  roomId: string;
-  text: string; // max 500文字
-}
+// --- UUID v4 バリデーションヘルパー ---
+const uuidV4Schema = z.string().uuid({ version: 4 });
 
-interface MatchFoundPayload {
-  roomId: string;
-  partnerId: string; // 相手のセッションID
-}
+// --- Request Payloads (Client → Server) ---
+export const RequestMatchSchema = z.object({});
 
-interface NewMessagePayload {
-  messageId: string;
-  senderId: string; // 送信者のセッションID
-  text: string;
-  timestamp: Date;
-}
+export const SendMessageSchema = z.object({
+  roomId: uuidV4Schema,
+  text: z.string().min(1).max(500).transform(s => s.trim().replace(/<[^>]*>/g, '')),
+});
 
-interface MessageDeletedPayload {
-  messageId: string;
-}
+export const LeaveRoomSchema = z.object({
+  roomId: uuidV4Schema,
+});
 
-interface RoomClosedPayload {
-  roomId: string;
-  reason: 'timeout' | 'user_left' | 'reported';
-}
+export const ReportContentSchema = z.object({
+  roomId: uuidV4Schema,
+  reason: z.enum(['spam', 'harassment', 'inappropriate_content', 'other']),
+});
 
-interface ErrorPayload {
-  code: string; // 'ROOM_CLOSED', 'INVALID_TEXT', 'MESSAGE_TOO_LONG' など
-  message: string;
+// --- Response Payloads (Server → Client) ---
+export const MatchFoundSchema = z.object({
+  roomId: uuidV4Schema,
+  partnerSessionId: uuidV4Schema,
+});
+
+export const NewMessageSchema = z.object({
+  messageId: uuidV4Schema,
+  senderSessionId: uuidV4Schema,
+  text: z.string(),
+  createdAt: z.string().datetime(), // ISO 8601
+});
+
+export const MessageDeletedSchema = z.object({
+  messageId: uuidV4Schema,
+});
+
+export const RoomClosedSchema = z.object({
+  roomId: uuidV4Schema,
+  reason: z.enum(['timeout', 'user_left', 'reported']),
+});
+
+export const PartnerDisconnectedSchema = z.object({
+  roomId: uuidV4Schema,
+});
+
+export const TimerUpdateSchema = z.object({
+  roomId: uuidV4Schema,
+  remainingSeconds: z.number().int().nonnegative(),
+});
+
+export const ErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+
+// --- 型推論 ---
+export type SendMessagePayload = z.infer<typeof SendMessageSchema>;
+export type ReportContentPayload = z.infer<typeof ReportContentSchema>;
+export type MatchFoundPayload = z.infer<typeof MatchFoundSchema>;
+export type NewMessagePayload = z.infer<typeof NewMessageSchema>;
+export type RoomClosedPayload = z.infer<typeof RoomClosedSchema>;
+export type ErrorPayload = z.infer<typeof ErrorSchema>;
+
+// --- WebSocketGatewayで使用するバリデーションヘルパー ---
+export function validatePayload<T>(
+  schema: z.ZodSchema<T>,
+  data: unknown
+): Result<T, ValidationError> {
+  const result = schema.safeParse(data);
+  return result.success
+    ? ok(result.data)
+    : err(new ValidationError(result.error.issues.map(i => i.message).join(', ')));
 }
 ```
 
 **Validation Rules**:
-- `text`: 1文字以上、500文字以内、HTMLタグ除去
-- `roomId`, `sessionId`: UUID v4形式
-- `reason`: 定義されたEnum値のみ
+- `text`: 1-500文字、空白除去、HTMLタグ除去（Zodのtransformで自動適用）
+- `roomId`, `sessionId`: UUID v4形式（Zodのuuid()で検証）
+- `reason`: Enum値のみ許可（Zodのenum()で検証）
+- **実行時検証**: WebSocketGatewayで全イベント受信時に`validatePayload()`を使用して検証
 
-**Serialization Format**: JSON（WebSocket通信）
-
-**Event Schemas**:
-- すべてのイベントペイロードはTypeScriptインターフェースで定義
-- 将来的にJSON SchemaまたはProtobufで厳密化を検討
-
-**Schema Versioning Strategy**:
-- 初期実装はバージョニングなし
-- 将来的にイベント名に`v1.`プレフィックスを追加（例: `v1.sendMessage`）
-
-**Backward/Forward Compatibility Rules**:
-- 新規フィールド追加時はオプショナルとする
-- 既存フィールドの削除や型変更は非推奨（新バージョンイベント作成）
-
-**Cross-Service Data Management**:
-- 現時点では単一バックエンドサービスのため該当なし
-- 将来的にマイクロサービス化する場合、Sagaパターンまたはイベントソーシングを検討
+**型共有戦略**:
+- `backend/src/domain/events/websocket.ts`で定義
+- フロントエンド（Web/Mobile）にはpnpm workspaceで共有パッケージとして提供
+  - 共有パッケージ: `packages/shared-types/`に配置
+  - `package.json`の`exports`フィールドでエクスポート
+  - フロントエンドは`import { SendMessagePayload } from '@cha-chat/shared-types'`で利用
 
 ## Error Handling
 
-### Error Strategy
+### Error Flow
 
-明確なエラーカテゴリと具体的な回復メカニズムを定義し、ユーザーに適切なフィードバックを提供します。
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as WebSocket Gateway
+    participant Service as Domain Service
+    participant DB as Supabase/Redis
+    participant ErrorHandler
+
+    Client->>Gateway: sendMessage(payload)
+    Gateway->>Gateway: validatePayload(SendMessageSchema)
+
+    alt バリデーションエラー
+        Gateway->>ErrorHandler: handleValidationError(error)
+        ErrorHandler-->>Client: error(VALIDATION_ERROR)
+    else バリデーション成功
+        Gateway->>Service: sendMessage(...)
+        Service->>DB: INSERT message
+
+        alt データベースエラー（一時的）
+            DB-->>Service: Error
+            Service->>ErrorHandler: handleTransientError(error)
+            ErrorHandler->>ErrorHandler: exponential backoff (最大3回)
+            ErrorHandler->>DB: RETRY INSERT
+
+            alt リトライ成功
+                DB-->>Service: Success
+                Service-->>Client: newMessage
+            else リトライ失敗
+                ErrorHandler-->>Client: error(DATABASE_ERROR)
+            end
+        else ビジネスロジックエラー
+            Service-->>ErrorHandler: Result.err(ROOM_CLOSED)
+            ErrorHandler-->>Client: error(ROOM_CLOSED, "再マッチングしてください")
+        else 成功
+            DB-->>Service: Success
+            Service-->>Client: newMessage
+        end
+    end
+```
 
 ### Error Categories and Responses
 
-**User Errors (4xx相当)**:
-- **Invalid Input**:
-  - エラー: メッセージテキストが空、500文字超過
-  - 応答: クライアント側でバリデーションエラー表示、送信ボタン無効化
-  - 回復: ユーザーに入力修正を促す
-- **Room Closed**:
-  - エラー: 既に終了したチャットルームにメッセージ送信
-  - 応答: `ROOM_CLOSED`エラーイベント送信、UI上で終了通知表示
-  - 回復: 新しいマッチングを促進するボタン表示
-- **Unauthorized**:
-  - エラー: 無効なセッションID
-  - 応答: WebSocket接続拒否、クライアント再接続
-  - 回復: セッション再生成と再接続
+**User Errors (4xx)**:
+- `VALIDATION_ERROR`: Zodバリデーション失敗（テキスト長超過、不正なUUID等）
+  - **通知**: エラーイベント即座送信
+  - **メッセージ**: 具体的な修正箇所を明示（例: "メッセージは500文字以内にしてください"）
+  - **リトライ**: なし（ユーザー修正必須）
+- `ROOM_CLOSED`: 終了済みルームにメッセージ送信
+  - **通知**: エラーイベント + 再マッチングボタン表示
+  - **メッセージ**: "チャットが終了しました。再度マッチングしますか？"
+  - **リトライ**: なし
 
-**System Errors (5xx相当)**:
-- **Database Connection Failure**:
-  - エラー: MongoDB/Redis接続エラー
-  - 応答: `DATABASE_ERROR`イベント送信、ユーザーに一時的なエラー通知
-  - 回復: 指数バックオフでリトライ、Circuit Breaker適用
-  - 監視: データベース接続ステータスをログ記録
-- **WebSocket Connection Timeout**:
-  - エラー: WebSocket接続タイムアウト
-  - 応答: クライアント側で再接続ロジック実行
-  - 回復: 指数バックオフ+ジッターで再接続、最大5回まで
-  - 監視: 接続タイムアウト頻度をメトリクス記録
-- **Message Queue Exhaustion**:
-  - エラー: Redisキューが満杯（極めて稀）
-  - 応答: マッチングリクエストを一時的に拒否
-  - 回復: レート制限適用、ユーザーに待機を促す
+**System Errors (5xx)**:
+- `DATABASE_ERROR`: Supabase接続エラー、クエリタイムアウト
+  - **通知**: エラーイベント送信
+  - **リトライ**: 指数バックオフ（1秒 → 2秒 → 4秒、最大3回）
+  - **Circuit Breaker**: 連続10回失敗でサービス停止、30秒後に復旧試行
+  - **メッセージ**: "サーバーエラーが発生しました。しばらくしてから再試行してください。"
+- `REDIS_ERROR`: Redis接続エラー
+  - **通知**: エラーイベント送信
+  - **リトライ**: 指数バックオフ（最大3回）
+  - **フォールバック**: マッチングキューのみメモリ管理に切り替え（一時的）
+  - **メッセージ**: "マッチング処理でエラーが発生しました。再度お試しください。"
+- `WEBSOCKET_ERROR`: WebSocket接続タイムアウト、切断
+  - **通知**: クライアント側で自動検知
+  - **リトライ**: 指数バックオフ（1秒 → 3秒 → 9秒、最大5回）
+  - **メッセージ**: "接続が切断されました。再接続しています..."
 
-**Business Logic Errors (422相当)**:
-- **Matching Queue Empty**:
-  - エラー: マッチング可能なユーザーがいない
-  - 応答: ユーザーを待機キューに追加、待機中ステータス表示
-  - 回復: タイムアウト（例: 5分）後に再試行を促す
-- **Duplicate Match Request**:
-  - エラー: 既にキューに登録済みのユーザーが再リクエスト
-  - 応答: 重複登録を拒否、現在の待機状態を通知
-  - 回復: ユーザーに待機継続を促す
+**Business Logic Errors (422)**:
+- `MATCHING_QUEUE_EMPTY`: マッチング相手なし
+  - **通知**: `waiting`イベント送信（エラーではない）
+  - **メッセージ**: "マッチング相手を探しています..."
+  - **リトライ**: 他ユーザー参加まで待機
+- `DUPLICATE_MATCH_REQUEST`: 重複マッチングリクエスト
+  - **通知**: 現在の待機状態を再送信
+  - **メッセージ**: "すでにマッチング待機中です"
+  - **リトライ**: なし
+- `ALREADY_REPORTED`: 同一ルームに重複報告
+  - **通知**: エラーイベント送信
+  - **メッセージ**: "すでに報告済みです"
+  - **リトライ**: なし
+
+### Error Handler Implementation
+
+```typescript
+// backend/src/infrastructure/error-handler.ts
+import { Result, err } from 'neverthrow';
+import { Socket } from 'socket.io';
+
+export type ErrorCategory = 'VALIDATION' | 'TRANSIENT' | 'FATAL' | 'BUSINESS_LOGIC';
+
+export interface ErrorContext {
+  category: ErrorCategory;
+  code: string;
+  message: string;
+  userMessage: string;
+  retryable: boolean;
+  traceId: string;
+}
+
+export class ErrorHandler {
+  handleError(socket: Socket, error: ErrorContext): void {
+    // 構造化ログ出力
+    this.logError(error);
+
+    // ユーザー通知
+    socket.emit('error', {
+      code: error.code,
+      message: error.userMessage,
+    });
+
+    // メトリクス記録
+    this.recordMetric(error.category, error.code);
+  }
+
+  async retryWithBackoff<T>(
+    operation: () => Promise<Result<T, Error>>,
+    maxRetries: number = 3
+  ): Promise<Result<T, Error>> {
+    for (let i = 0; i < maxRetries; i++) {
+      const result = await operation();
+      if (result.isOk()) return result;
+
+      // 指数バックオフ
+      await this.sleep(Math.pow(2, i) * 1000);
+    }
+    return err(new Error('Max retries exceeded'));
+  }
+
+  private logError(error: ErrorContext): void {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'ERROR',
+      category: error.category,
+      code: error.code,
+      message: error.message,
+      traceId: error.traceId,
+    }));
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private recordMetric(category: ErrorCategory, code: string): void {
+    // メトリクス記録ロジック（例: Prometheus）
+  }
+}
+```
 
 ### Monitoring
 
-**Error Tracking**:
-- すべてのエラーをログに記録（エラー種別、タイムスタンプ、セッションID、ルームID）
-- クリティカルエラー（DB接続失敗、大量エラー発生）はアラート通知
-
-**Logging**:
-- 構造化ログ（JSON形式）で出力
-- ログレベル: ERROR（回復不能）、WARN（回復可能）、INFO（正常動作）
-
-**Health Monitoring**:
-- ヘルスチェックエンドポイント: `GET /health`
-  - MongoDB接続状態
-  - Redis接続状態
-  - WebSocketサーバー稼働状態
-- メトリクス:
-  - アクティブチャットルーム数
-  - マッチング待機ユーザー数
-  - メッセージ送信レート（messages/sec）
-  - エラー発生率
+- **ヘルスチェック**: `GET /health` — サーバー稼働状態、DB/Redis接続確認
+- **エラーログ**: 構造化ログ（JSON形式） — timestamp, level, category, code, message, traceId
+- **メトリクス**:
+  - アクティブルーム数 — Gauge
+  - 待機ユーザー数 — Gauge
+  - メッセージレート — Counter
+  - エラー発生率（カテゴリ別） — Counter
+  - WebSocket接続数 — Gauge
 
 ## Testing Strategy
 
 ### Unit Tests
-
-**Backend Services**:
-1. **MatchingService.tryMatch()**: 2ユーザーが待機キューにいる場合、正常にマッチングしてルームIDを返す
-2. **MessageService.sendMessage()**: テキストメッセージが正常に保存され、送信者に4件目のメッセージが存在する場合、最古メッセージが削除される
-3. **MessageService.validateText()**: 空文字、500文字超過、HTMLタグ含む入力が適切にバリデーションエラーを返す
-4. **RoomManager.closeRoom()**: チャットルーム終了時に全メッセージが削除され、ステータスが`closed`に更新される
-5. **SessionManager.generateSession()**: 一意のUUID v4形式のセッションIDが生成される
-
-**Frontend Logic**:
-1. **WebSocketStore.connect()**: WebSocket接続が成功し、接続状態が`connected`に更新される
-2. **MessageStore.addMessage()**: 新規メッセージが配列に追加され、リアクティブに画面更新される
-3. **MessageStore.removeMessage()**: 削除対象メッセージIDが配列から削除される
+1. `MatchingService.tryMatch()`: 2ユーザーマッチング成功
+2. `MessageService.sendMessage()`: メッセージ保存と4件目以降の削除
+3. `MessageService.validateText()`: 空文字、500文字超過のバリデーション
+4. `RoomManager.closeRoom()`: ルーム終了と全メッセージ削除
+5. `SessionManager.generateSession()`: UUID v4形式のセッションID生成
 
 ### Integration Tests
-
-**Backend Cross-Component Flows**:
-1. **マッチングからルーム作成までのフロー**: MatchingServiceがRoomManagerを呼び出し、MongoDBにチャットルームが正常に作成される
-2. **メッセージ送信からブロードキャストまでのフロー**: MessageServiceがメッセージ保存後、WebSocketGatewayが全参加者に配信する
-3. **チャットルーム終了フロー**: RoomManagerのタイマー終了時にMessageServiceが全メッセージを削除し、WebSocketGatewayが終了通知を送信する
-4. **エラーハンドリング**: MongoDB接続失敗時にエラーイベントが送信され、ログに記録される
-5. **Redis待機キュー**: ユーザーがキューに追加され、マッチング成立時に削除される
-
-**Frontend-Backend Integration**:
-1. **WebSocket接続とイベント受信**: クライアントが接続後、マッチング成立イベントを正常に受信する
-2. **メッセージ送受信**: クライアントがメッセージ送信し、相手クライアントがリアルタイムで受信する
+1. マッチングからルーム作成までのフロー
+2. メッセージ送信からブロードキャストまでのフロー
+3. チャットルーム終了フロー
+4. Redis待機キュー操作
+5. Drizzle ORM + Supabase接続
 
 ### E2E/UI Tests
-
-**Critical User Paths**:
-1. **マッチングからチャット終了まで**: ユーザーがアクセス → マッチングリクエスト → マッチング成立 → メッセージ送受信 → 10分経過で終了通知表示
-2. **メッセージ自動削除**: ユーザーが4件目のメッセージを送信した際、最古メッセージがUI上から消える
-3. **途中退出**: 一方のユーザーが切断した際、もう一方のユーザーに相手切断通知が表示される
-4. **エラー表示**: 無効なメッセージ送信時にエラーメッセージが表示される
-5. **レスポンシブデザイン**: モバイル、タブレット、デスクトップで同等の機能が利用可能
-
-### Performance/Load Tests
-
-**Concurrency Tests**:
-1. **同時接続ユーザー数**: 1000ユーザー同時接続時のWebSocketサーバー負荷とメモリ消費を測定
-2. **マッチング処理スループット**: 100マッチング/秒のリクエストに対してRedisキューが正常に動作する
-3. **メッセージ送信レート**: 1チャットルームあたり10 messages/secの高頻度送信に耐えられる
-4. **データベース負荷**: 1000アクティブルーム（2000接続）時のMongoDB読み書き性能を検証
+1. マッチングからチャット終了までの完全フロー
+2. メッセージ自動削除のUI反映
+3. 途中退出時の相手通知
+4. レスポンシブデザイン確認
 
 ## Security Considerations
 
 ### 匿名性保護
-
-- **個人情報の非収集**: ユーザー名、メールアドレス、IPアドレス等の個人情報を一切収集・保存しない
-- **セッション識別子**: UUID v4による一意かつランダムな匿名識別子を使用
-- **データ完全削除**: チャットルーム終了時に全メッセージをデータベースから完全削除（TTLインデックスで保証）
-
-### 認証・認可
-
-- **認証不要**: 完全匿名のため、ユーザー認証は実装しない
-- **チャットルームアクセス制御**: ルーム参加者のセッションIDでアクセス権限をチェック（他ユーザーのメッセージ閲覧不可）
+- 個人情報の非収集: ユーザー名、メールアドレス等を一切収集しない
+- セッション識別子: UUID v4による一意かつランダムな匿名識別子
+- データ完全削除: チャットルーム終了時に全メッセージを削除
 
 ### データ保護
+- 通信暗号化: WebSocket通信はTLS/SSL（WSS）で暗号化
+- アクセス制御: ルーム参加者のセッションIDでアクセス権限チェック
 
-- **通信暗号化**: WebSocket通信はTLS/SSL（WSS）で暗号化
-- **メッセージ保持期間**: 最大10分間のみ保持、以降は完全削除
-- **監査ログ**: 報告ログのみ保持（匿名化されたセッションID、報告理由、タイムスタンプ）
-
-### コンテンツモデレーション
-
-- **報告機能**: ユーザーが不適切なコンテンツを報告可能
-- **将来的なAIモデレーション**: スパムやハラスメント検出のためのAI導入を検討
-
-### 脅威モデル
-
-- **スパム攻撃**: レート制限（例: 1セッションあたり1マッチング/分、10メッセージ/分）
-- **悪意あるコンテンツ**: HTMLタグ除去、XSS対策
-- **DDoS攻撃**: WebSocketサーバーのコネクション制限、CDN活用
+### 脅威対策
+- スパム攻撃: レート制限（1セッションあたり10メッセージ/分）
+- XSS対策: HTMLタグ除去、特殊文字エスケープ
 
 ## Performance & Scalability
 
 ### Target Metrics
-
-- **WebSocket接続**: 初期目標1000同時接続、将来的に10000同時接続
-- **マッチング応答時間**: 平均1秒以内（待機ユーザーが存在する場合）
-- **メッセージ配信遅延**: 平均100ms以内（同一リージョン内）
-- **データベース応答時間**: MongoDB読み取り平均10ms以内、書き込み平均50ms以内
+- WebSocket接続: 初期目標1000同時接続
+- マッチング応答時間: 平均1秒以内
+- メッセージ配信遅延: 平均100ms以内
 
 ### Scaling Approaches
+- **水平スケーリング**: Socket.IO Redis Adapter導入
+- **データベース**: Supabaseコネクションプール最適化
 
-**水平スケーリング（将来）**:
-- **WebSocketサーバー**: Socket.IO Redis Adapterを使用して複数インスタンス間でイベント共有
-- **バックエンドサービス**: ステートレス設計により、ロードバランサーで負荷分散
-- **データベース**: MongoDBレプリカセットで読み取りスケール、シャーディングで書き込みスケール
+## Containerization & Deployment
 
-**垂直スケーリング（初期）**:
-- Node.jsインスタンスのメモリ/CPU増強
-- MongoDBとRedisのリソース拡張
+### Docker Compose Architecture
 
-### Caching Strategies
+Docker Composeを使用して、バックエンドとフロントエンド（Web版）をコンテナ上で動作させます。開発環境と本番環境の両方に対応した構成を提供します。
 
-- **Redisキャッシュ**: 待機キュー、セッション情報
-- **MongoDBクエリ最適化**: 適切なインデックス設計（roomId, createdAt複合インデックス）
-- **WebSocketイベントバッファリング**: 短時間のメッセージバッファリングで一括配信（トレードオフ: 遅延とスループット）
+**コンテナ構成**:
 
-### Optimization Techniques
+```mermaid
+graph TB
+    subgraph DockerCompose[Docker Compose環境]
+        Frontend[frontend-web<br/>Svelte Dev Server]
+        Backend[backend<br/>Hono + Socket.IO]
+        Redis[redis<br/>Alpine]
 
-- **メッセージペイロード最小化**: 不要なフィールドを送信しない
-- **WebSocket圧縮**: Socket.IOのpermessage-deflate拡張を有効化
-- **データベース接続プーリング**: MongoDB Node.js Driverのコネクションプール設定
+        Frontend -->|WebSocket| Backend
+        Backend -->|キュー| Redis
+        Backend -->|PostgreSQL| Supabase[External: Supabase]
+    end
 
-## Migration Strategy
-
-**初期デプロイ（新規システム）**:
-- データ移行は不要（新規プロジェクト）
-- 段階的ロールアウト:
-  1. **Phase 1 (Week 1-2)**: バックエンド実装とWeb版フロントエンド実装
-  2. **Phase 2 (Week 3-4)**: モバイルアプリ実装とマルチプラットフォームテスト
-  3. **Phase 3 (Week 5)**: 小規模ベータテスト（限定ユーザー）
-  4. **Phase 4 (Week 6)**: 本番デプロイと監視強化
-
-**Rollback Triggers**:
-- クリティカルバグ（メッセージ削除失敗、データ漏洩）
-- パフォーマンス劣化（応答時間2秒超過）
-- 高エラー率（5%以上）
-
-**Validation Checkpoints**:
-- 各フェーズ後にE2Eテスト実施
-- ベータテスト後にユーザーフィードバック収集
-- 本番デプロイ後に監視ダッシュボードで主要メトリクス確認
-
-## Supporting References
-
-### TypeScript型定義（詳細）
-
-**Result型（エラーハンドリング）**:
-```typescript
-type Result<T, E> =
-  | { success: true; value: T }
-  | { success: false; error: E };
+    Browser[ブラウザ] -->|http://localhost:5173| Frontend
+    Browser -->|ws://localhost:3000| Backend
 ```
 
-**Honoサーバー基本構成（バックエンド）**:
-```typescript
-import { Hono } from 'hono';
-import { Server } from 'socket.io';
-import { createServer } from 'node:http';
+**コンテナ間通信**:
+- frontendコンテナ: ポート5173（Vite Dev Server）
+- backendコンテナ: ポート3000（Hono + Socket.IO）
+- redisコンテナ: ポート6379（内部通信のみ）
+- Supabase: 外部マネージドサービス（環境変数で接続）
 
-// Hono環境変数の型定義
-type Env = {
-  Variables: {
-    userId: string;
-  };
-};
+### Docker Compose Configuration
 
-const app = new Hono<Env>();
+#### compose.yaml
 
-// HTTPエンドポイント例（ヘルスチェック）
-app.get('/health', (c) => {
-  return c.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+```yaml
+services:
+  # バックエンドサービス
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    command: pnpm run dev
+    networks:
+      - cha-chat-network
 
-// Node.jsサーバー作成
-const server = createServer(app.fetch);
+  # フロントエンド（Web版）サービス
+  frontend-web:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+      - VITE_WS_URL=ws://localhost:3000
+    volumes:
+      - ./frontend/web:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: pnpm run dev
+    networks:
+      - cha-chat-network
 
-// Socket.IOサーバーを同じHTTPサーバーに統合
-const io = new Server(server, {
-  cors: {
-    origin: '*', // 本番環境では適切に設定
-    methods: ['GET', 'POST'],
-  },
-});
+  # Redis（マッチングキュー用）
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - cha-chat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-// WebSocketイベントハンドリング
-io.on('connection', (socket) => {
-  console.log('New WebSocket connection:', socket.id);
+volumes:
+  redis-data:
 
-  socket.on('requestMatch', async () => {
-    // マッチング処理
-  });
-
-  socket.on('sendMessage', async (data) => {
-    // メッセージ送信処理
-  });
-});
-
-// サーバー起動
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+networks:
+  cha-chat-network:
+    driver: bridge
 ```
 
-**WebSocket接続管理（Svelte）**:
-```typescript
-import { writable } from 'svelte/store';
-import { io, Socket } from 'socket.io-client';
+**Key Decisions**:
+- **Multi-stage Dockerfile**: development/productionターゲットで環境を切り替え
+- **Volume Mount**: ホットリロード対応のためソースコードをマウント
+- **Health Check**: Redisの起動状態を監視
+- **Bridge Network**: コンテナ間通信を分離
 
-interface ConnectionState {
-  status: 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
-  socket: Socket | null;
-}
+#### Backend Dockerfile
 
-export const connectionStore = writable<ConnectionState>({
-  status: 'disconnected',
-  socket: null,
-});
+```dockerfile
+# ベースイメージ: Node.js v24 LTS "Krypton"
+FROM node:24-alpine AS base
 
-export function connectWebSocket(url: string) {
-  const socket = io(url, {
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-  });
+# pnpmインストール
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-  socket.on('connect', () => {
-    connectionStore.update(state => ({ ...state, status: 'connected', socket }));
-  });
+WORKDIR /app
 
-  socket.on('disconnect', () => {
-    connectionStore.update(state => ({ ...state, status: 'disconnected' }));
-  });
+# 依存関係のインストール
+FROM base AS dependencies
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
-  socket.on('reconnecting', () => {
-    connectionStore.update(state => ({ ...state, status: 'reconnecting' }));
-  });
+# 開発環境
+FROM base AS development
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3000
+CMD ["pnpm", "run", "dev"]
 
-  return socket;
+# ビルド
+FROM base AS build
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY . .
+RUN pnpm run build
+
+# 本番環境
+FROM base AS production
+ENV NODE_ENV=production
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json ./
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
+```
+
+**Implementation Notes**:
+- **Multi-stage Build**: 依存関係キャッシュを最大活用
+- **Alpine Linux**: イメージサイズ最小化
+- **pnpm**: 高速で効率的なパッケージマネージャー
+- **Node.js 24 LTS**: 長期サポート保証
+
+#### Frontend (Web) Dockerfile
+
+```dockerfile
+# ベースイメージ: Node.js v24 LTS
+FROM node:24-alpine AS base
+
+# pnpmインストール
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# 依存関係のインストール
+FROM base AS dependencies
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# 開発環境
+FROM base AS development
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY . .
+EXPOSE 5173
+CMD ["pnpm", "run", "dev", "--host"]
+
+# ビルド
+FROM base AS build
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY . .
+RUN pnpm run build
+
+# 本番環境（Nginx）
+FROM nginx:alpine AS production
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**Implementation Notes**:
+- **開発モード**: Vite Dev Serverでホットリロード
+- **本番モード**: 静的ファイルをNginxで配信
+- **--host フラグ**: コンテナ外からのアクセスを許可
+
+#### nginx.conf (本番環境用)
+
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPAルーティング対応
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 静的ファイルのキャッシュ
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # セキュリティヘッダー
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
 }
 ```
 
-**WebSocket接続管理（Flutter/Riverpod）**:
-```dart
-import 'package:riverpod/riverpod.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+### Environment Variables
 
-enum ConnectionStatus { disconnected, connecting, connected, reconnecting }
+#### .env.example
 
-class ConnectionState {
-  final ConnectionStatus status;
-  final IO.Socket? socket;
+```bash
+# Backend
+NODE_ENV=development
+PORT=3000
+DATABASE_URL=postgresql://user:password@db.supabase.co:5432/postgres
+REDIS_URL=redis://redis:6379
 
-  ConnectionState({required this.status, this.socket});
-}
-
-class ConnectionNotifier extends StateNotifier<ConnectionState> {
-  ConnectionNotifier() : super(ConnectionState(status: ConnectionStatus.disconnected));
-
-  void connect(String url) {
-    final socket = IO.io(url, <String, dynamic>{
-      'transports': ['websocket'],
-      'reconnection': true,
-      'reconnectionAttempts': 5,
-      'reconnectionDelay': 1000,
-      'reconnectionDelayMax': 5000,
-    });
-
-    socket.onConnect((_) {
-      state = ConnectionState(status: ConnectionStatus.connected, socket: socket);
-    });
-
-    socket.onDisconnect((_) {
-      state = ConnectionState(status: ConnectionStatus.disconnected);
-    });
-
-    socket.onReconnecting((_) {
-      state = ConnectionState(status: ConnectionStatus.reconnecting, socket: socket);
-    });
-  }
-}
-
-final connectionProvider = StateNotifierProvider<ConnectionNotifier, ConnectionState>((ref) {
-  return ConnectionNotifier();
-});
+# Frontend (Web)
+VITE_API_URL=http://localhost:3000
+VITE_WS_URL=ws://localhost:3000
 ```
 
-### MongoDB TTLインデックス設定例
+**Security Notes**:
+- `.env`ファイルは`.gitignore`に追加
+- 本番環境では環境変数は外部から注入
+- Supabase接続文字列は暗号化されたシークレット管理
 
-```javascript
-// Messageコレクション
-db.messages.createIndex(
-  { createdAt: 1 },
-  { expireAfterSeconds: 600 } // 10分 = 600秒
-);
+### Development Workflow
 
-// ChatRoomコレクション
-db.chatRooms.createIndex(
-  { expiresAt: 1 },
-  { expireAfterSeconds: 0 } // expiresAt時刻に削除
-);
+#### ローカル開発開始
+
+```bash
+# 環境変数設定
+cp .env.example .env
+# DATABASE_URLをSupabaseの接続文字列に設定
+
+# コンテナ起動
+docker compose up -d
+
+# ログ確認
+docker compose logs -f
+
+# 停止
+docker compose down
 ```
 
-### Redisキュー操作例
+#### コンテナ再ビルド
 
-```typescript
-import { createClient } from 'redis';
+```bash
+# 全コンテナ再ビルド
+docker compose build --no-cache
 
-const redisClient = createClient({ url: 'redis://localhost:6379' });
-await redisClient.connect();
-
-// ユーザーをキューに追加
-async function enqueueUser(sessionId: string): Promise<void> {
-  await redisClient.lPush('waiting_queue', sessionId);
-}
-
-// マッチング実行（2ユーザー取得）
-async function tryMatch(): Promise<{ user1: string; user2: string } | null> {
-  const user1 = await redisClient.rPop('waiting_queue');
-  const user2 = await redisClient.rPop('waiting_queue');
-
-  if (user1 && user2) {
-    return { user1, user2 };
-  }
-
-  // マッチング失敗時は取り出したユーザーをキューに戻す
-  if (user1) await redisClient.lPush('waiting_queue', user1);
-  return null;
-}
+# 特定コンテナのみ再ビルド
+docker compose build backend
+docker compose build frontend-web
 ```
+
+#### トラブルシューティング
+
+```bash
+# コンテナ内でシェル実行
+docker compose exec backend sh
+docker compose exec frontend-web sh
+
+# ボリュームクリア
+docker compose down -v
+```
+
+### Production Deployment
+
+本番環境では以下の追加設定が必要:
+
+1. **環境変数**:
+   - `NODE_ENV=production`
+   - `DATABASE_URL`: Supabase本番接続文字列
+   - `REDIS_URL`: マネージドRedis（例: Upstash）
+
+2. **TLS/SSL**:
+   - Nginx または Cloudflare で HTTPS 終端
+   - WebSocket (WSS) 対応
+
+3. **スケーリング**:
+   - `docker compose up --scale backend=3`
+   - Socket.IO Redis Adapter 有効化
+
+4. **モニタリング**:
+   - コンテナヘルスチェック
+   - ログ集約（例: Loki, CloudWatch）
+   - メトリクス収集（例: Prometheus）
+
+### Compatibility Notes
+
+**Docker Version Requirements**:
+- Docker Engine: 20.10.0+
+- Docker Compose: v2.0.0+
+
+**Host System Requirements**:
+- CPU: 2 cores minimum
+- Memory: 4GB minimum
+- Storage: 10GB minimum
+
+**Supabase Connection**:
+- Supabaseは外部マネージドサービスとして動作
+- DATABASE_URL環境変数で接続
+- PostgreSQL 15+ 互換
+
+**Mobile Frontend**:
+- Flutter (frontend/mobile) はコンテナ化対象外
+- ネイティブビルドが必要なため、ホストマシンで直接実行
+- APIエンドポイントは環境変数で設定

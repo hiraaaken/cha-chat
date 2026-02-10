@@ -17,7 +17,8 @@
 | Hono | v4.11.8 | HTTPフレームワーク |
 | Socket.IO | v4.8.3 | WebSocketサーバー |
 | TypeScript | - | 開発言語 |
-| MongoDB | - | データストア |
+| Supabase | - | データストア（PostgreSQL） |
+| Drizzle ORM | - | ORM + マイグレーション |
 | Redis | - | マッチングキュー |
 
 ### フロントエンド（Web版）
