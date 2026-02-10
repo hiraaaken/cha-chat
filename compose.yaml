@@ -1,0 +1,65 @@
+services:
+  # バックエンドサービス
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    command: pnpm run dev
+    networks:
+      - cha-chat-network
+
+  # フロントエンド（Web版）サービス
+  frontend-web:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+      - VITE_WS_URL=ws://localhost:3000
+    volumes:
+      - ./frontend/web:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: pnpm run dev
+    networks:
+      - cha-chat-network
+
+  # Redis（マッチングキュー用）
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - cha-chat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis-data:
+
+networks:
+  cha-chat-network:
+    driver: bridge
