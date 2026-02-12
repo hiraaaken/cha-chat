@@ -1,0 +1,26 @@
+{
+  "name": "cha-chat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "「ちゃちゃっと」気軽に会話できる、匿名チャットアプリケーション",
+  "scripts": {
+    "dev": "pnpm --parallel --stream run dev",
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --recursive run test",
+    "lint": "pnpm --recursive run lint",
+    "format": "pnpm --recursive run format",
+    "clean": "pnpm --recursive run clean && rm -rf node_modules"
+  },
+  "keywords": [
+    "chat",
+    "anonymous",
+    "realtime",
+    "websocket"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.13.0",
+    "pnpm": ">=9.0.0"
+  }
+}
