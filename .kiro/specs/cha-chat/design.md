@@ -26,6 +26,75 @@
 - グループチャット（1対1のみ）
 - メッセージ検索や編集機能
 
+## Implementation Phases
+
+この設計は段階的に実装し、各フェーズで動作確認を行いながら進めます。
+
+### Phase 0: プロジェクト雛形とインフラストラクチャ基盤
+**目的**: 開発環境の構築とプロジェクト構成の確立
+
+**実装内容**:
+- モノレポ構成（pnpm workspace）の設定
+- backend/のディレクトリ構造とTypeScript設定
+- Hono最小構成（ヘルスチェックエンドポイントのみ）
+- Redis接続確認
+- Supabase接続確認とDrizzle ORM初期設定
+
+**達成可能な動作**: `GET /health` でサーバー稼働確認、Docker Compose起動確認
+
+### Phase 1: WebSocket基本接続とセッション管理
+**目的**: リアルタイム通信基盤の確立
+
+**実装内容**:
+- Socket.IOサーバー統合（Honoと同一HTTPサーバー上）
+- WebSocketGateway基本実装（接続、切断イベント）
+- SessionManager実装（匿名セッションID生成）
+- クライアント接続テスト用の簡易HTMLページ
+
+**達成可能な動作**: ブラウザからWebSocket接続、セッションID発行確認
+
+### Phase 2: マッチング機能
+**目的**: ユーザーペアリングとチャットルーム作成
+
+**実装内容**:
+- MatchingService実装（Redisキュー管理）
+- RoomManager基本実装（ルーム作成、シンプルなタイマー）
+- マッチング成立イベント配信
+- データベーススキーマ作成（chat_rooms, messages）
+
+**MVP Scope**: タイマー復元機能は省略し、シンプルなsetTimeoutで実装
+
+**達成可能な動作**: 2つのブラウザでマッチング成立、ルームID共有確認
+
+### Phase 3: メッセージ送受信と自動削除
+**目的**: コアチャット機能の実装
+
+**実装内容**:
+- MessageService実装（送信、保存、削除ロジック）
+- メッセージブロードキャスト
+- 自動削除ロジック（自分の3つ前より古いメッセージ）
+- チャットルーム終了処理
+
+**達成可能な動作**: テキストメッセージ送受信、自動削除動作確認
+
+### Phase 4: フロントエンド実装
+**目的**: ユーザー向けUIの提供
+
+**実装内容**:
+- Web版UI（Svelte）
+- モバイル版UI（Flutter）
+- レスポンシブデザイン
+- 残り時間表示、報告機能
+
+### Phase 5: スケーラビリティとセキュリティ強化（Future Enhancements）
+**目的**: 本番運用に向けた改善
+
+**実装内容**:
+- タイマー復元機能（Redis永続化 + サーバー起動時復元）
+- Socket.IO Redis Adapter（水平スケーリング対応）
+- レート制限（スパム対策）
+- エラーモニタリング強化
+
 ## Architecture
 
 ### Architecture Pattern & Boundary Map
@@ -104,6 +173,106 @@ graph TB
 | **Containerization** | Docker | コンテナランタイム | 開発環境統一 |
 | | Docker Compose v2 | オーケストレーション | サービス管理 |
 | | Redis 7-alpine | キャッシュ/キュー | 軽量イメージ |
+
+### Project Structure
+
+モノレポ構成とディレクトリ構造の詳細を以下に示します。
+
+#### モノレポ構成（pnpm workspace）
+
+**pnpm-workspace.yaml**:
+```yaml
+packages:
+  - 'backend'
+  - 'frontend/web'
+  - 'frontend/mobile'
+  - 'packages/*'
+```
+
+#### Backend ディレクトリ構造
+
+```
+backend/
+├── src/
+│   ├── domain/                    # ドメイン層
+│   │   ├── entities/              # エンティティ
+│   │   │   ├── chatRoom.ts
+│   │   │   ├── message.ts
+│   │   │   ├── report.ts
+│   │   │   └── session.ts
+│   │   ├── types/                 # 型定義
+│   │   │   ├── base.ts            # Newtype, ValidationError
+│   │   │   └── valueObjects.ts    # RoomId, SessionId, MessageId, etc.
+│   │   └── events/                # ドメインイベント
+│   │       ├── index.ts           # DomainEvent型定義
+│   │       └── websocket.ts       # WebSocketイベントスキーマ（Zod）
+│   ├── application/               # アプリケーション層（サービス）
+│   │   ├── services/
+│   │   │   ├── matchingService.ts
+│   │   │   ├── roomManager.ts
+│   │   │   ├── messageService.ts
+│   │   │   ├── sessionManager.ts
+│   │   │   └── reportService.ts
+│   │   └── interfaces/            # サービスインターフェース
+│   │       ├── matchingServiceInterface.ts
+│   │       ├── roomManagerInterface.ts
+│   │       └── messageServiceInterface.ts
+│   ├── infrastructure/            # インフラストラクチャ層
+│   │   ├── http/
+│   │   │   └── honoServer.ts      # Honoサーバー初期化
+│   │   ├── websocket/
+│   │   │   └── websocketGateway.ts # Socket.IOサーバー
+│   │   ├── database/
+│   │   │   ├── drizzle.ts         # Drizzle ORM設定
+│   │   │   └── migrations/        # マイグレーションファイル
+│   │   ├── cache/
+│   │   │   └── redis.ts           # Redis接続管理
+│   │   └── error-handler.ts       # エラーハンドラー
+│   ├── db/
+│   │   └── schema.ts              # Drizzleスキーマ定義
+│   └── index.ts                   # エントリポイント
+├── package.json
+├── tsconfig.json
+├── biome.json
+├── Dockerfile
+└── .env.example
+
+packages/                          # 共有パッケージ
+└── shared-types/                  # フロントエンド/バックエンド共有型
+    ├── src/
+    │   ├── events.ts              # WebSocketイベント型
+    │   └── index.ts
+    ├── package.json
+    └── tsconfig.json
+```
+
+#### Frontend (Web) ディレクトリ構造
+
+```
+frontend/web/
+├── src/
+│   ├── lib/
+│   │   ├── stores/                # Svelte Store
+│   │   │   ├── chatStore.ts
+│   │   │   ├── messageStore.ts
+│   │   │   └── connectionStore.ts
+│   │   └── websocket/
+│   │       └── socketClient.ts    # Socket.IO Client
+│   ├── components/                # UIコンポーネント
+│   │   ├── ChatRoom.svelte
+│   │   ├── MessageList.svelte
+│   │   ├── MessageInput.svelte
+│   │   └── Timer.svelte
+│   ├── routes/                    # ページルート
+│   │   ├── +page.svelte
+│   │   └── +layout.svelte
+│   └── app.html
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── Dockerfile
+└── nginx.conf
+```
 
 ## System Flows
 
@@ -409,7 +578,7 @@ type MatchingError =
 - 10分タイマーの開始と残り時間の定期配信
 - タイマー終了時の全メッセージ削除とルームクローズ
 - ユーザー途中退出の検知と通知
-- サーバー再起動時のタイマー復元
+- サーバー再起動時のタイマー復元（Future Enhancement - Phase 5のみ、MVP Scopeでは省略）
 
 **Dependencies**
 - Inbound: MatchingService — チャットルーム作成 (P0)
@@ -434,7 +603,7 @@ interface RoomManagerInterface {
   getRoom(roomId: RoomId): Promise<Result<ChatRoom, RoomError>>;
   getRoomStatus(roomId: RoomId): Promise<Result<RoomStatus, RoomError>>;
   handleUserDisconnect(sessionId: SessionId, roomId: RoomId): Promise<Result<RoomClosedEvent, RoomError>>;
-  restoreActiveTimers(): Promise<Result<RestoredTimer[], RoomError>>;
+  restoreActiveTimers(): Promise<Result<RestoredTimer[], RoomError>>; // Future Enhancement (Phase 5)
 }
 
 interface RoomStatus {
@@ -472,11 +641,12 @@ type RoomError =
 - Integration:
   - Drizzle ORMでINSERT/UPDATE
   - タイマーはsetTimeoutで管理
-  - Redis統合でタイマー永続化を実現
+  - **MVP Scope (Phase 2)**: シンプルなsetTimeoutのみ実装、Redis永続化は省略
+  - **Future Enhancement (Phase 5)**: Redis統合でタイマー永続化を実現
     - ルーム作成時: `HSET room:timer:{roomId} expiresAt {timestamp}` + `EXPIRE room:timer:{roomId} 600`
     - サーバー起動時: `KEYS room:timer:*`で全タイマーを取得し、`setTimeout`を復元
     - ルーム終了時: `DEL room:timer:{roomId}`でタイマー情報を削除
-- Failsafe: pg_cronが1分ごとに期限切れルームをクリーンアップ（バックアップ機構）
+- Failsafe: pg_cronが1分ごとに期限切れルームをクリーンアップ（バックアップ機構、MVP Scopeでも実装）
 
 #### MessageService
 
