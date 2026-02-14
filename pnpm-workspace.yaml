@@ -1,0 +1,5 @@
+packages:
+  - 'backend'
+  - 'frontend/web'
+  - 'frontend/mobile'
+  - 'packages/*'

@@ -1,0 +1,40 @@
+{
+  "name": "@cha-chat/backend",
+  "version": "0.1.0",
+  "description": "Backend server for cha-chat - Hono + Socket.IO",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "hono",
+    "websocket",
+    "socket.io",
+    "chat"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.11.8",
+    "socket.io": "^4.8.3",
+    "neverthrow": "^8.3.0",
+    "zod": "^3.24.1",
+    "drizzle-orm": "^0.39.1",
+    "postgres": "^3.4.5",
+    "ioredis": "^5.4.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "drizzle-kit": "^0.30.1"
+  }
+}
