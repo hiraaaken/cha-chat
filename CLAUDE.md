@@ -67,6 +67,14 @@ cha-chat/
 - ステアリング: `.kiro/steering/`
 - 仕様書: `.kiro/specs/cha-chat/`
 
+## 開発ルール
+
+詳細は以下のファイルを参照:
+
+- `.claude/rules/git-rules.md` - Git/コミット/PR ルール
+- `.claude/rules/dev-rules.md` - Issue ベース開発フロー
+- `.claude/rules/ts-code-style.md` - TypeScript コーディング規約
+
 ---
 
 # AI-DLC（Spec-Driven Development）
