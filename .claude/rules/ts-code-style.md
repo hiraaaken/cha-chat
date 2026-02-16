@@ -13,11 +13,11 @@
 ```typescript
 // Good
 function closeChatRoom(room: ActiveChatRoom, reason: RoomCloseReason): ClosedChatRoom {
-  return { ...room, status: 'closed', closedAt: new Date(), closeReason: reason };
+  return { ...room, _tag: 'ClosedChatRoom', closedAt: new Date(), closeReason: reason };
 }
 
 // Bad
-room.status = 'closed';
+room._tag = 'ClosedChatRoom';
 ```
 
 ### `readonly` を活用する
@@ -59,6 +59,27 @@ type ChatRoom = ActiveChatRoom | ClosedChatRoom;
 interface ChatRoom { isActive: boolean; isClosed: boolean; }
 ```
 
+### `_tag` ディスクリミナントで Union 型を判別する
+
+Discriminated union の判別プロパティには `_tag` を使用し、値は**型名と一致**させる。`status` 等の意味的フラグは使わない。
+
+```typescript
+// Good — _tag の値が型名と一致
+interface ActiveChatRoom {
+  readonly _tag: 'ActiveChatRoom';
+}
+interface ClosedChatRoom {
+  readonly _tag: 'ClosedChatRoom';
+  readonly closedAt: Date;
+}
+
+// Bad — 文字列リテラルが型名と無関係
+interface ActiveChatRoom { status: 'active'; }
+interface ClosedChatRoom { status: 'closed'; }
+```
+
+`switch (room._tag)` で網羅性チェック（exhaustive check）が効くようにする。
+
 ## エラーハンドリング
 
 ### `neverthrow` の `Result` 型を使用する
@@ -96,6 +117,23 @@ export function createMessage(
   createdAt: Date
 ): Message {
   return { id, roomId, senderSessionId, text, createdAt };
+}
+```
+
+### ワークフロー関数パターン（サービス層）
+
+サービス層ではクラスを使わず、`Workflow<I, O, E>` 型のファクトリ関数で実装する。依存はクロージャでキャプチャする。**1ファイル = 1ワークフロー関数**。
+
+```typescript
+// application/types/workflow.ts
+type Workflow<I, O, E> = (input: I) => Promise<Result<O, E>>;
+
+// 型エイリアスで具体型を定義
+type EnqueueUser = Workflow<SessionId, void, MatchingError>;
+
+// ファクトリ関数が依存をクロージャにキャプチャ
+export function createEnqueueUser(queue: MatchingQueueInterface): EnqueueUser {
+  return (sessionId) => queue.enqueue(sessionId);
 }
 ```
 
