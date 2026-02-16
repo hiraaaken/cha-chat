@@ -10,16 +10,16 @@ export interface Session {
 export type MatchingStatus = Waiting | Matched;
 
 export interface Waiting {
-  status: 'waiting';
-  sessionId: SessionId;
-  enqueuedAt: Date;
+  readonly _tag: 'Waiting';
+  readonly sessionId: SessionId;
+  readonly enqueuedAt: Date;
 }
 
 export interface Matched {
-  status: 'matched';
-  sessionId: SessionId;
-  roomId: RoomId;
-  matchedAt: Date;
+  readonly _tag: 'Matched';
+  readonly sessionId: SessionId;
+  readonly roomId: RoomId;
+  readonly matchedAt: Date;
 }
 
 // --- ファクトリ関数 ---
@@ -28,9 +28,9 @@ export function createSession(sessionId: SessionId, socketId: SocketId, createdA
 }
 
 export function createWaiting(sessionId: SessionId, enqueuedAt: Date): Waiting {
-  return { status: 'waiting', sessionId, enqueuedAt };
+  return { _tag: 'Waiting', sessionId, enqueuedAt };
 }
 
 export function createMatched(sessionId: SessionId, roomId: RoomId, matchedAt: Date): Matched {
-  return { status: 'matched', sessionId, roomId, matchedAt };
+  return { _tag: 'Matched', sessionId, roomId, matchedAt };
 }

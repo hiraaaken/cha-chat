@@ -12,13 +12,13 @@ interface _ChatRoom {
 }
 
 export interface ActiveChatRoom extends _ChatRoom {
-  status: 'active';
+  readonly _tag: 'ActiveChatRoom';
 }
 
 export interface ClosedChatRoom extends _ChatRoom {
-  status: 'closed';
-  closedAt: Date;
-  closeReason: RoomCloseReason;
+  readonly _tag: 'ClosedChatRoom';
+  readonly closedAt: Date;
+  readonly closeReason: RoomCloseReason;
 }
 
 export type RoomCloseReason = 'timeout' | 'user_left' | 'reported';
@@ -37,14 +37,14 @@ export function createActiveChatRoom(
     user2SessionId,
     createdAt,
     expiresAt,
-    status: 'active',
+    _tag: 'ActiveChatRoom',
   };
 }
 
 export function closeChatRoom(room: ActiveChatRoom, reason: RoomCloseReason): ClosedChatRoom {
   return {
     ...room,
-    status: 'closed',
+    _tag: 'ClosedChatRoom',
     closedAt: new Date(),
     closeReason: reason,
   };
