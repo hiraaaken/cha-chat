@@ -29,12 +29,7 @@ export class SessionError extends DomainBaseError<SessionErrorCode> {}
 export class ReportError extends DomainBaseError<ReportErrorCode> {}
 
 // --- DomainError Union型 ---
-export type DomainError =
-  | MatchingError
-  | RoomError
-  | MessageError
-  | SessionError
-  | ReportError;
+export type DomainError = MatchingError | RoomError | MessageError | SessionError | ReportError;
 
 // --- エラーコンテキスト ---
 export type ErrorCategory = 'TRANSIENT' | 'FATAL' | 'BUSINESS_LOGIC';
@@ -48,10 +43,7 @@ export interface ErrorContext {
   readonly traceId: string;
 }
 
-const TRANSIENT_CODES: ReadonlySet<string> = new Set([
-  'QUEUE_ERROR',
-  'ROOM_CREATION_FAILED',
-]);
+const TRANSIENT_CODES: ReadonlySet<string> = new Set(['QUEUE_ERROR', 'ROOM_CREATION_FAILED']);
 
 const FATAL_CODES: ReadonlySet<string> = new Set([
   'ROOM_DATABASE_ERROR',

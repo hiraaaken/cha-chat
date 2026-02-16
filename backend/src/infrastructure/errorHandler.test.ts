@@ -69,10 +69,7 @@ describe('retryWithBackoff', () => {
   });
 
   it('失敗後にリトライして成功する', async () => {
-    const operation = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValue('success');
+    const operation = vi.fn().mockRejectedValueOnce(new Error('fail')).mockResolvedValue('success');
 
     const result = await retryWithBackoff(operation, 3, 0);
 
@@ -90,10 +87,7 @@ describe('retryWithBackoff', () => {
 
   it('デフォルトの baseDelay は 1000ms', async () => {
     const start = Date.now();
-    const operation = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValue('success');
+    const operation = vi.fn().mockRejectedValueOnce(new Error('fail')).mockResolvedValue('success');
 
     await retryWithBackoff(operation, 1);
 
