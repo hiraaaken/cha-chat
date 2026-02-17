@@ -1,11 +1,18 @@
 export type RoomStatus = 'idle' | 'active' | 'closed';
 export type RoomCloseReason = 'timeout' | 'user_left' | 'reported';
 
-export const chatStore = $state({
-  roomStatus: 'idle' as RoomStatus,
-  roomId: null as string | null,
+interface ChatState {
+  roomStatus: RoomStatus;
+  roomId: string | null;
+  remainingSeconds: number;
+  closeReason: RoomCloseReason | null;
+}
+
+export const chatStore = $state<ChatState>({
+  roomStatus: 'idle',
+  roomId: null,
   remainingSeconds: 0,
-  closeReason: null as RoomCloseReason | null,
+  closeReason: null,
 });
 
 export function activate(roomId: string) {

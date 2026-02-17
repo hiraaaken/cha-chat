@@ -5,8 +5,12 @@ export interface StoreMessage {
   readonly createdAt: string;
 }
 
-export const messageStore = $state({
-  messages: [] as StoreMessage[],
+interface MessageState {
+  messages: StoreMessage[];
+}
+
+export const messageStore = $state<MessageState>({
+  messages: [],
 });
 
 export function addMessage(message: StoreMessage) {

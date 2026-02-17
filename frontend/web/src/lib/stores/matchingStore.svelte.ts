@@ -1,7 +1,11 @@
 export type MatchingStatus = 'idle' | 'waiting' | 'matched';
 
-export const matchingStore = $state({
-  status: 'idle' as MatchingStatus,
+interface MatchingState {
+  status: MatchingStatus;
+}
+
+export const matchingStore = $state<MatchingState>({
+  status: 'idle',
 });
 
 export function startWaiting() {

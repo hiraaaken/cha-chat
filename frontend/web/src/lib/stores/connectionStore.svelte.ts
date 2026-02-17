@@ -1,9 +1,15 @@
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
-export const connectionStore = $state({
-  status: 'disconnected' as ConnectionStatus,
-  sessionId: null as string | null,
-  error: null as string | null,
+interface ConnectionState {
+  status: ConnectionStatus;
+  sessionId: string | null;
+  error: string | null;
+}
+
+export const connectionStore = $state<ConnectionState>({
+  status: 'disconnected',
+  sessionId: null,
+  error: null,
 });
 
 export function setConnecting() {
