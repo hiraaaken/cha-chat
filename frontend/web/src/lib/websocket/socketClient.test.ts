@@ -100,6 +100,19 @@ describe('socketClient', () => {
 
       expect(mockSocket.connect).toHaveBeenCalledTimes(1);
     });
+
+    it('切断状態の既存ソケットがある場合は新規生成せず再接続する', async () => {
+      const { io } = await import('socket.io-client');
+      const { connect } = await import('./socketClient');
+
+      connect();
+      mockSocket.connected = false;
+
+      connect();
+
+      expect(io).toHaveBeenCalledTimes(1);
+      expect(mockSocket.connect).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('disconnect', () => {

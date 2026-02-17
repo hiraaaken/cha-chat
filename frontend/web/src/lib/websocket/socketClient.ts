@@ -31,6 +31,11 @@ export function connect(): void {
     return;
   }
 
+  if (socket) {
+    socket.connect();
+    return;
+  }
+
   socket = io(import.meta.env.VITE_WS_URL || '/', {
     autoConnect: false,
     reconnection: true,
