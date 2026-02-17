@@ -147,7 +147,7 @@ graph TB
 - **リアルタイム通信**: Socket.IO v4.8.3を採用（room管理機能、自動再接続）
 - **データベース**: Supabase（PostgreSQL）+ Drizzle ORM（型安全、マイグレーション管理）
 - **マッチングキュー**: Redis（FIFO、アトミック操作）
-- **状態管理**: Web版はSvelte Store、モバイル版はRiverpod
+- **状態管理**: Web版はSvelte 5 Runes（`$state` + 関数export）、モバイル版はRiverpod
 
 ### Technology Stack
 
@@ -155,7 +155,7 @@ graph TB
 |-------|------------------|-----------------|-------|
 | **Frontend - Web** | Svelte v5.49.0 | Webブラウザ版UI実装 | Runes、改善されたTypeScript対応 |
 | | socket.io-client v4.8.3 | WebSocket通信クライアント | Socket.IOサーバーとの双方向通信 |
-| | Svelte Store | 状態管理 | チャット状態、メッセージ履歴の管理 |
+| | Svelte 5 Runes (`$state`) | 状態管理 | `$state` オブジェクト + 関数export パターン |
 | **Frontend - Mobile** | Flutter v3.38.6 | iOS/Androidアプリ実装 | クロスプラットフォーム |
 | | socket_io_client | WebSocket通信クライアント | Socket.IOサーバーとの双方向通信 |
 | | Riverpod | 状態管理 | 型安全な状態管理 |
@@ -252,10 +252,11 @@ packages/                          # 共有パッケージ
 frontend/web/
 ├── src/
 │   ├── lib/
-│   │   ├── stores/                # Svelte Store
-│   │   │   ├── chatStore.ts
-│   │   │   ├── messageStore.ts
-│   │   │   └── connectionStore.ts
+│   │   ├── stores/                # Svelte Store（Runes: $state + 関数export）
+│   │   │   ├── chatStore.svelte.ts
+│   │   │   ├── messageStore.svelte.ts
+│   │   │   ├── connectionStore.svelte.ts
+│   │   │   └── matchingStore.svelte.ts
 │   │   └── websocket/
 │   │       └── socketClient.ts    # Socket.IO Client
 │   ├── components/                # UIコンポーネント
@@ -791,16 +792,19 @@ type ReportError =
 **Dependencies**
 - Outbound: WebSocketGateway — メッセージ送受信 (P0)
 - External: socket.io-client v4.8.3 — WebSocket通信 (P0)
-- External: Svelte Store — 状態管理 (P0)
+- External: Svelte 5 Runes (`$state`) — 状態管理 (P0)
 
 **Contracts**: State [X]
 
 ##### State Management
 
+**Implementation Pattern**: Svelte 5 Runes — `$state` オブジェクト + 関数export（`.svelte.ts` ファイル）
+
 **State Model**:
-- `chatStore`: チャットルーム状態
-- `messageStore`: メッセージ一覧
-- `connectionStore`: WebSocket接続状態
+- `chatStore`: チャットルーム状態（roomStatus, roomId, remainingSeconds, closeReason）
+- `messageStore`: メッセージ一覧（messages配列）
+- `connectionStore`: WebSocket接続状態（status, sessionId, error）
+- `matchingStore`: マッチング状態（status）
 
 ### Frontend / Mobile UI層
 

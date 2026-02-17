@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { chatStore } from './chatStore.svelte';
+import {
+  activate,
+  chatStore,
+  close,
+  resetChatStore,
+  updateRemainingSeconds,
+} from './chatStore.svelte';
 
 describe('chatStore', () => {
   beforeEach(() => {
-    chatStore.reset();
+    resetChatStore();
   });
 
   it('初期状態が正しい', () => {
@@ -15,7 +21,7 @@ describe('chatStore', () => {
 
   describe('activate', () => {
     it('idle → active に遷移し、roomIdが設定される', () => {
-      chatStore.activate('room-123');
+      activate('room-123');
 
       expect(chatStore.roomStatus).toBe('active');
       expect(chatStore.roomId).toBe('room-123');
@@ -25,7 +31,7 @@ describe('chatStore', () => {
 
   describe('updateRemainingSeconds', () => {
     it('残り時間を更新する', () => {
-      chatStore.updateRemainingSeconds(300);
+      updateRemainingSeconds(300);
 
       expect(chatStore.remainingSeconds).toBe(300);
     });
@@ -33,35 +39,35 @@ describe('chatStore', () => {
 
   describe('close', () => {
     it('active → closed に遷移し、closeReasonが設定される', () => {
-      chatStore.activate('room-123');
-      chatStore.close('timeout');
+      activate('room-123');
+      close('timeout');
 
       expect(chatStore.roomStatus).toBe('closed');
       expect(chatStore.closeReason).toBe('timeout');
     });
 
     it('user_left理由で終了できる', () => {
-      chatStore.activate('room-123');
-      chatStore.close('user_left');
+      activate('room-123');
+      close('user_left');
 
       expect(chatStore.closeReason).toBe('user_left');
     });
 
     it('reported理由で終了できる', () => {
-      chatStore.activate('room-123');
-      chatStore.close('reported');
+      activate('room-123');
+      close('reported');
 
       expect(chatStore.closeReason).toBe('reported');
     });
   });
 
-  describe('reset', () => {
+  describe('resetChatStore', () => {
     it('全状態を初期値に戻す', () => {
-      chatStore.activate('room-123');
-      chatStore.updateRemainingSeconds(300);
-      chatStore.close('timeout');
+      activate('room-123');
+      updateRemainingSeconds(300);
+      close('timeout');
 
-      chatStore.reset();
+      resetChatStore();
 
       expect(chatStore.roomStatus).toBe('idle');
       expect(chatStore.roomId).toBeNull();

@@ -1,35 +1,33 @@
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
-class ConnectionStore {
-  status = $state<ConnectionStatus>('disconnected');
-  sessionId = $state<string | null>(null);
-  error = $state<string | null>(null);
+export const connectionStore = $state({
+  status: 'disconnected' as ConnectionStatus,
+  sessionId: null as string | null,
+  error: null as string | null,
+});
 
-  setConnecting = () => {
-    this.status = 'connecting';
-    this.error = null;
-  };
-
-  setConnected = (sessionId: string) => {
-    this.status = 'connected';
-    this.sessionId = sessionId;
-    this.error = null;
-  };
-
-  setDisconnected = () => {
-    this.status = 'disconnected';
-    this.sessionId = null;
-  };
-
-  setError = (message: string) => {
-    this.error = message;
-  };
-
-  reset = () => {
-    this.status = 'disconnected';
-    this.sessionId = null;
-    this.error = null;
-  };
+export function setConnecting() {
+  connectionStore.status = 'connecting';
+  connectionStore.error = null;
 }
 
-export const connectionStore = new ConnectionStore();
+export function setConnected(sessionId: string) {
+  connectionStore.status = 'connected';
+  connectionStore.sessionId = sessionId;
+  connectionStore.error = null;
+}
+
+export function setDisconnected() {
+  connectionStore.status = 'disconnected';
+  connectionStore.sessionId = null;
+}
+
+export function setError(message: string) {
+  connectionStore.error = message;
+}
+
+export function resetConnectionStore() {
+  connectionStore.status = 'disconnected';
+  connectionStore.sessionId = null;
+  connectionStore.error = null;
+}

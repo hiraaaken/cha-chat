@@ -1,33 +1,31 @@
 export type RoomStatus = 'idle' | 'active' | 'closed';
 export type RoomCloseReason = 'timeout' | 'user_left' | 'reported';
 
-class ChatStore {
-  roomStatus = $state<RoomStatus>('idle');
-  roomId = $state<string | null>(null);
-  remainingSeconds = $state(0);
-  closeReason = $state<RoomCloseReason | null>(null);
+export const chatStore = $state({
+  roomStatus: 'idle' as RoomStatus,
+  roomId: null as string | null,
+  remainingSeconds: 0,
+  closeReason: null as RoomCloseReason | null,
+});
 
-  activate = (roomId: string) => {
-    this.roomStatus = 'active';
-    this.roomId = roomId;
-    this.closeReason = null;
-  };
-
-  updateRemainingSeconds = (seconds: number) => {
-    this.remainingSeconds = seconds;
-  };
-
-  close = (reason: RoomCloseReason) => {
-    this.roomStatus = 'closed';
-    this.closeReason = reason;
-  };
-
-  reset = () => {
-    this.roomStatus = 'idle';
-    this.roomId = null;
-    this.remainingSeconds = 0;
-    this.closeReason = null;
-  };
+export function activate(roomId: string) {
+  chatStore.roomStatus = 'active';
+  chatStore.roomId = roomId;
+  chatStore.closeReason = null;
 }
 
-export const chatStore = new ChatStore();
+export function updateRemainingSeconds(seconds: number) {
+  chatStore.remainingSeconds = seconds;
+}
+
+export function close(reason: RoomCloseReason) {
+  chatStore.roomStatus = 'closed';
+  chatStore.closeReason = reason;
+}
+
+export function resetChatStore() {
+  chatStore.roomStatus = 'idle';
+  chatStore.roomId = null;
+  chatStore.remainingSeconds = 0;
+  chatStore.closeReason = null;
+}

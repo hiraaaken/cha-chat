@@ -5,20 +5,18 @@ export interface StoreMessage {
   readonly createdAt: string;
 }
 
-class MessageStore {
-  messages = $state<StoreMessage[]>([]);
+export const messageStore = $state({
+  messages: [] as StoreMessage[],
+});
 
-  addMessage = (message: StoreMessage) => {
-    this.messages = [...this.messages, message];
-  };
-
-  removeMessage = (messageId: string) => {
-    this.messages = this.messages.filter((m) => m.messageId !== messageId);
-  };
-
-  clearMessages = () => {
-    this.messages = [];
-  };
+export function addMessage(message: StoreMessage) {
+  messageStore.messages = [...messageStore.messages, message];
 }
 
-export const messageStore = new MessageStore();
+export function removeMessage(messageId: string) {
+  messageStore.messages = messageStore.messages.filter((m) => m.messageId !== messageId);
+}
+
+export function clearMessages() {
+  messageStore.messages = [];
+}

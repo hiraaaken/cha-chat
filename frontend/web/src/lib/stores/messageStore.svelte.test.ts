@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { messageStore } from './messageStore.svelte';
 import type { StoreMessage } from './messageStore.svelte';
+import { addMessage, clearMessages, messageStore, removeMessage } from './messageStore.svelte';
 
 const createTestMessage = (overrides: Partial<StoreMessage> = {}): StoreMessage => ({
   messageId: 'msg-1',
@@ -12,7 +12,7 @@ const createTestMessage = (overrides: Partial<StoreMessage> = {}): StoreMessage 
 
 describe('messageStore', () => {
   beforeEach(() => {
-    messageStore.clearMessages();
+    clearMessages();
   });
 
   it('初期状態が空配列', () => {
@@ -22,7 +22,7 @@ describe('messageStore', () => {
   describe('addMessage', () => {
     it('メッセージを追加する', () => {
       const msg = createTestMessage();
-      messageStore.addMessage(msg);
+      addMessage(msg);
 
       expect(messageStore.messages).toHaveLength(1);
       expect(messageStore.messages[0]).toEqual(msg);
@@ -32,8 +32,8 @@ describe('messageStore', () => {
       const msg1 = createTestMessage({ messageId: 'msg-1' });
       const msg2 = createTestMessage({ messageId: 'msg-2', text: 'World' });
 
-      messageStore.addMessage(msg1);
-      messageStore.addMessage(msg2);
+      addMessage(msg1);
+      addMessage(msg2);
 
       expect(messageStore.messages).toHaveLength(2);
       expect(messageStore.messages[0].messageId).toBe('msg-1');
@@ -46,9 +46,9 @@ describe('messageStore', () => {
       const msg1 = createTestMessage({ messageId: 'msg-1' });
       const msg2 = createTestMessage({ messageId: 'msg-2' });
 
-      messageStore.addMessage(msg1);
-      messageStore.addMessage(msg2);
-      messageStore.removeMessage('msg-1');
+      addMessage(msg1);
+      addMessage(msg2);
+      removeMessage('msg-1');
 
       expect(messageStore.messages).toHaveLength(1);
       expect(messageStore.messages[0].messageId).toBe('msg-2');
@@ -56,8 +56,8 @@ describe('messageStore', () => {
 
     it('存在しないIDを指定しても安全', () => {
       const msg = createTestMessage();
-      messageStore.addMessage(msg);
-      messageStore.removeMessage('nonexistent');
+      addMessage(msg);
+      removeMessage('nonexistent');
 
       expect(messageStore.messages).toHaveLength(1);
     });
@@ -65,10 +65,10 @@ describe('messageStore', () => {
 
   describe('clearMessages', () => {
     it('全メッセージを削除する', () => {
-      messageStore.addMessage(createTestMessage({ messageId: 'msg-1' }));
-      messageStore.addMessage(createTestMessage({ messageId: 'msg-2' }));
+      addMessage(createTestMessage({ messageId: 'msg-1' }));
+      addMessage(createTestMessage({ messageId: 'msg-2' }));
 
-      messageStore.clearMessages();
+      clearMessages();
 
       expect(messageStore.messages).toEqual([]);
     });

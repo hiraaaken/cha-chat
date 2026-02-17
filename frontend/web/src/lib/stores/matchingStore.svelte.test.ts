@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { matchingStore } from './matchingStore.svelte';
+import { matched, matchingStore, resetMatchingStore, startWaiting } from './matchingStore.svelte';
 
 describe('matchingStore', () => {
   beforeEach(() => {
-    matchingStore.reset();
+    resetMatchingStore();
   });
 
   it('初期状態がidleである', () => {
@@ -12,7 +12,7 @@ describe('matchingStore', () => {
 
   describe('startWaiting', () => {
     it('idle → waiting に遷移する', () => {
-      matchingStore.startWaiting();
+      startWaiting();
 
       expect(matchingStore.status).toBe('waiting');
     });
@@ -20,19 +20,19 @@ describe('matchingStore', () => {
 
   describe('matched', () => {
     it('waiting → matched に遷移する', () => {
-      matchingStore.startWaiting();
-      matchingStore.matched();
+      startWaiting();
+      matched();
 
       expect(matchingStore.status).toBe('matched');
     });
   });
 
-  describe('reset', () => {
+  describe('resetMatchingStore', () => {
     it('idleに戻る', () => {
-      matchingStore.startWaiting();
-      matchingStore.matched();
+      startWaiting();
+      matched();
 
-      matchingStore.reset();
+      resetMatchingStore();
 
       expect(matchingStore.status).toBe('idle');
     });

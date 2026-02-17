@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { connectionStore } from './connectionStore.svelte';
+import {
+  connectionStore,
+  resetConnectionStore,
+  setConnected,
+  setConnecting,
+  setDisconnected,
+  setError,
+} from './connectionStore.svelte';
 
 describe('connectionStore', () => {
   beforeEach(() => {
-    connectionStore.reset();
+    resetConnectionStore();
   });
 
   it('初期状態が正しい', () => {
@@ -14,8 +21,8 @@ describe('connectionStore', () => {
 
   describe('setConnecting', () => {
     it('connecting状態に遷移し、エラーをクリアする', () => {
-      connectionStore.setError('previous error');
-      connectionStore.setConnecting();
+      setError('previous error');
+      setConnecting();
 
       expect(connectionStore.status).toBe('connecting');
       expect(connectionStore.error).toBeNull();
@@ -24,8 +31,8 @@ describe('connectionStore', () => {
 
   describe('setConnected', () => {
     it('connected状態に遷移し、sessionIdが設定される', () => {
-      connectionStore.setConnecting();
-      connectionStore.setConnected('session-abc');
+      setConnecting();
+      setConnected('session-abc');
 
       expect(connectionStore.status).toBe('connected');
       expect(connectionStore.sessionId).toBe('session-abc');
@@ -35,8 +42,8 @@ describe('connectionStore', () => {
 
   describe('setDisconnected', () => {
     it('disconnected状態に遷移し、sessionIdがクリアされる', () => {
-      connectionStore.setConnected('session-abc');
-      connectionStore.setDisconnected();
+      setConnected('session-abc');
+      setDisconnected();
 
       expect(connectionStore.status).toBe('disconnected');
       expect(connectionStore.sessionId).toBeNull();
@@ -45,18 +52,18 @@ describe('connectionStore', () => {
 
   describe('setError', () => {
     it('エラーメッセージを設定する', () => {
-      connectionStore.setError('Connection failed');
+      setError('Connection failed');
 
       expect(connectionStore.error).toBe('Connection failed');
     });
   });
 
-  describe('reset', () => {
+  describe('resetConnectionStore', () => {
     it('全状態を初期値に戻す', () => {
-      connectionStore.setConnected('session-abc');
-      connectionStore.setError('some error');
+      setConnected('session-abc');
+      setError('some error');
 
-      connectionStore.reset();
+      resetConnectionStore();
 
       expect(connectionStore.status).toBe('disconnected');
       expect(connectionStore.sessionId).toBeNull();

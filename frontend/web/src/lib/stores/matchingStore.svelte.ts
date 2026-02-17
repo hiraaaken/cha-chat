@@ -1,19 +1,17 @@
 export type MatchingStatus = 'idle' | 'waiting' | 'matched';
 
-class MatchingStore {
-  status = $state<MatchingStatus>('idle');
+export const matchingStore = $state({
+  status: 'idle' as MatchingStatus,
+});
 
-  startWaiting = () => {
-    this.status = 'waiting';
-  };
-
-  matched = () => {
-    this.status = 'matched';
-  };
-
-  reset = () => {
-    this.status = 'idle';
-  };
+export function startWaiting() {
+  matchingStore.status = 'waiting';
 }
 
-export const matchingStore = new MatchingStore();
+export function matched() {
+  matchingStore.status = 'matched';
+}
+
+export function resetMatchingStore() {
+  matchingStore.status = 'idle';
+}
