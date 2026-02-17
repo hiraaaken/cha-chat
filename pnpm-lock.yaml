@@ -10,9 +10,6 @@ importers:
 
   backend:
     dependencies:
-      '@electric-sql/pglite':
-        specifier: ^0.3.15
-        version: 0.3.15
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.9(hono@4.11.9)
@@ -41,6 +38,9 @@ importers:
       '@biomejs/biome':
         specifier: ^1.9.4
         version: 1.9.4
+      '@electric-sql/pglite':
+        specifier: ^0.3.15
+        version: 0.3.15
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.11

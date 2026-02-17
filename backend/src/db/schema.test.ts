@@ -1,5 +1,5 @@
 import type { PGlite } from '@electric-sql/pglite';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { chatRooms, messages, reports } from './schema';
 import { type TestDatabase, createTestDatabase } from './testHelper';
@@ -198,14 +198,21 @@ describe('データベースマイグレーション', () => {
     });
 
     it('messagesにレコードを挿入・取得できる', async () => {
-      const rooms = await db.select().from(chatRooms).limit(1);
-      const roomId = rooms[0].id;
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      const [room] = await db
+        .insert(chatRooms)
+        .values({
+          user1SessionId: '00000000-0000-4000-a000-000000000003',
+          user2SessionId: '00000000-0000-4000-a000-000000000004',
+          expiresAt,
+        })
+        .returning();
 
       const inserted = await db
         .insert(messages)
         .values({
-          roomId,
-          senderSessionId: '00000000-0000-4000-a000-000000000001',
+          roomId: room.id,
+          senderSessionId: '00000000-0000-4000-a000-000000000003',
           text: 'こんにちは！',
         })
         .returning();
@@ -215,14 +222,21 @@ describe('データベースマイグレーション', () => {
     });
 
     it('reportsにレコードを挿入・取得できる', async () => {
-      const rooms = await db.select().from(chatRooms).limit(1);
-      const roomId = rooms[0].id;
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      const [room] = await db
+        .insert(chatRooms)
+        .values({
+          user1SessionId: '00000000-0000-4000-a000-000000000005',
+          user2SessionId: '00000000-0000-4000-a000-000000000006',
+          expiresAt,
+        })
+        .returning();
 
       const inserted = await db
         .insert(reports)
         .values({
-          roomId,
-          reporterSessionId: '00000000-0000-4000-a000-000000000001',
+          roomId: room.id,
+          reporterSessionId: '00000000-0000-4000-a000-000000000005',
           reason: 'spam',
         })
         .returning();
@@ -248,7 +262,6 @@ describe('データベースマイグレーション', () => {
         text: '削除テスト用メッセージ',
       });
 
-      const { eq } = await import('drizzle-orm');
       await db.delete(chatRooms).where(eq(chatRooms.id, room.id));
 
       const remainingMessages = await db
