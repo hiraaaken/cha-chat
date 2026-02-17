@@ -3,7 +3,11 @@ import { type Result, err, ok } from 'neverthrow';
 import type { SessionManagerInterface } from '../application/interfaces/sessionManagerInterface';
 import { type Session, createSession } from '../domain/entities/session';
 import { SessionError } from '../domain/types/errors';
-import { type SessionId, type SocketId, SessionId as toSessionId } from '../domain/types/valueObjects';
+import {
+  type SessionId,
+  type SocketId,
+  SessionId as toSessionId,
+} from '../domain/types/valueObjects';
 
 function sessionNotFoundError(): SessionError {
   return new SessionError('SESSION_NOT_FOUND', 'セッションが見つかりません');

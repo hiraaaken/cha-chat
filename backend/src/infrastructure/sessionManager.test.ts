@@ -22,8 +22,7 @@ describe('InMemorySessionManager', () => {
     it('生成されたSessionIdはUUID v4形式である', () => {
       const manager = createManager();
       const session = manager.generateSession(testSocketId)._unsafeUnwrap();
-      const uuidV4Regex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
       expect(uuidV4Regex.test(session.sessionId as string)).toBe(true);
     });
