@@ -301,24 +301,29 @@
   - 自動再接続機能を有効化
   - _Requirements: 5.1, 5.4_
 
-### - [ ] 16. Svelte Storeによる状態管理
-- [ ] 16.1 チャット状態のStore実装
-  - `frontend/web/src/lib/stores/chatStore.ts`にchatStoreを実装
-  - 現在のチャット状態（waiting、matched、chatting、closed）を管理
-  - roomId、partnerSessionId、remainingSecondsを保持
+### - [x] 16. Svelte Storeによる状態管理（Runes: $state + 関数export パターン）
+- [x] 16.1 チャット状態のStore実装
+  - `frontend/web/src/lib/stores/chatStore.svelte.ts`にchatStoreを実装
+  - Svelte 5 Runesの`$state`オブジェクト + 関数exportパターンで実装
+  - roomStatus（idle/active/closed）、roomId、remainingSeconds、closeReasonを保持
   - _Requirements: 2.2, 6.1_
 
-- [ ] 16.2 メッセージ状態のStore実装
-  - `frontend/web/src/lib/stores/messageStore.ts`にmessageStoreを実装
+- [x] 16.2 メッセージ状態のStore実装
+  - `frontend/web/src/lib/stores/messageStore.svelte.ts`にmessageStoreを実装
   - メッセージ一覧（配列）を管理
-  - addMessage、removeMessage、clearMessagesメソッドを提供
+  - addMessage、removeMessage、clearMessages関数を提供
   - _Requirements: 3.1, 4.5, 6.4_
 
-- [ ] 16.3 接続状態のStore実装
-  - `frontend/web/src/lib/stores/connectionStore.ts`にconnectionStoreを実装
-  - WebSocket接続状態（connected、disconnected、reconnecting）を管理
+- [x] 16.3 接続状態のStore実装
+  - `frontend/web/src/lib/stores/connectionStore.svelte.ts`にconnectionStoreを実装
+  - WebSocket接続状態（disconnected、connecting、connected）を管理
   - sessionIdを保持
   - _Requirements: 5.1_
+
+- [x] 16.4 マッチング状態のStore実装
+  - `frontend/web/src/lib/stores/matchingStore.svelte.ts`にmatchingStoreを実装
+  - マッチング状態（idle/waiting/matched）を管理
+  - _Requirements: 2.1, 2.2_
 
 ### - [ ] 17. UIコンポーネントの実装
 - [ ] 17.1 (P) マッチング待機画面コンポーネント

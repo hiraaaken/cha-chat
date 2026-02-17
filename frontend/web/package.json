@@ -1,0 +1,32 @@
+{
+  "name": "@cha-chat/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web frontend for cha-chat - Svelte 5",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "clean": "rm -rf dist .svelte-kit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@testing-library/svelte": "^5.2.7",
+    "jsdom": "^26.0.0",
+    "svelte": "^5.49.0",
+    "svelte-check": "^4.1.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^4.0.18"
+  }
+}
