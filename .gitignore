@@ -40,3 +40,6 @@ build/
 
 ### Docker ###
 docker-compose.override.yml
+
+### MCP ###
+.mcp.json
