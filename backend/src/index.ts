@@ -1,8 +1,10 @@
 import type { Server as HttpServer } from 'node:http';
 import { serve } from '@hono/node-server';
 import { createEnqueueUser } from './application/services/enqueueUser';
+import { createTryMatch } from './application/services/tryMatch';
 import { createHonoServer } from './infrastructure/http/honoServer';
 import { InMemoryMatchingQueue } from './infrastructure/matchingQueue';
+import { InMemoryRoomManager } from './infrastructure/roomManager';
 import { InMemorySessionManager } from './infrastructure/sessionManager';
 import { createWebSocketGateway } from './infrastructure/websocket/webSocketGateway';
 
@@ -31,8 +33,10 @@ const httpServer = serve(
 // 依存関係の初期化
 const sessionManager = new InMemorySessionManager();
 const matchingQueue = new InMemoryMatchingQueue();
+const roomManager = new InMemoryRoomManager();
 const enqueueUser = createEnqueueUser(matchingQueue);
+const tryMatch = createTryMatch(matchingQueue, roomManager);
 
 // WebSocket Gatewayの起動
 // @hono/node-server の serve() は HTTP サーバーを返すため HttpServer にキャスト
-createWebSocketGateway(httpServer as HttpServer, sessionManager, enqueueUser);
+createWebSocketGateway(httpServer as HttpServer, sessionManager, enqueueUser, tryMatch);
