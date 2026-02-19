@@ -1,12 +1,24 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EnqueueUser, TryMatch } from '../../application/interfaces/matchingServiceInterface';
+import type {
+  MessageServiceInterface,
+  SendMessageResult,
+} from '../../application/interfaces/messageServiceInterface';
 import type { SessionManagerInterface } from '../../application/interfaces/sessionManagerInterface';
+import type { Message } from '../../domain/entities/message';
 import type { Session } from '../../domain/entities/session';
-import { MatchingError, SessionError } from '../../domain/types/errors';
-import { RoomId, SessionId, SocketId } from '../../domain/types/valueObjects';
-import { handleConnection, handleRequestMatch } from './webSocketGateway';
+import { MatchingError, MessageError, SessionError } from '../../domain/types/errors';
+import {
+  MessageId,
+  MessageText,
+  RoomId,
+  SessionId,
+  SocketId,
+} from '../../domain/types/valueObjects';
+import { handleConnection, handleRequestMatch, handleSendMessage } from './webSocketGateway';
 
+// --- テスト用定数 ---
 const testSocketId = SocketId('test-socket-id-abc')._unsafeUnwrap();
 const user1SocketId = SocketId('socket-user1-abc')._unsafeUnwrap();
 const user2SocketId = SocketId('socket-user2-xyz')._unsafeUnwrap();
@@ -14,6 +26,7 @@ const testSessionId = SessionId('00000000-0000-4000-a000-000000000001')._unsafeU
 const user1SessionId = SessionId('00000000-0000-4000-a000-000000000001')._unsafeUnwrap();
 const user2SessionId = SessionId('00000000-0000-4000-a000-000000000002')._unsafeUnwrap();
 const testRoomId = RoomId('00000000-0000-4000-a000-000000000099')._unsafeUnwrap();
+const testMessageId = MessageId('00000000-0000-4000-a000-000000000088')._unsafeUnwrap();
 
 const testSession: Session = {
   sessionId: testSessionId,
@@ -31,6 +44,14 @@ const user2Session: Session = {
   createdAt: new Date(),
 };
 
+const testMessage: Message = {
+  id: testMessageId,
+  roomId: testRoomId,
+  senderSessionId: user1SessionId,
+  text: MessageText('テストメッセージ')._unsafeUnwrap(),
+  createdAt: new Date('2026-02-19T00:00:00Z'),
+};
+
 function createMockSocket(id = 'test-socket-id-abc') {
   return {
     id,
@@ -38,9 +59,19 @@ function createMockSocket(id = 'test-socket-id-abc') {
     emit: vi.fn(),
     on: vi.fn(),
     disconnect: vi.fn(),
+    join: vi.fn(),
   };
 }
 
+function createMockOps() {
+  return {
+    emitToSocket: vi.fn(),
+    joinSocketToRoom: vi.fn(),
+    broadcastToRoom: vi.fn(),
+  };
+}
+
+// --- handleRequestMatch ---
 describe('handleRequestMatch', () => {
   it('enqueueUserが成功しマッチなしの場合にwaitingイベントを発行する', async () => {
     const socket = createMockSocket();
@@ -52,23 +83,16 @@ describe('handleRequestMatch', () => {
       invalidateSession: vi.fn(),
       bindSocketToSession: vi.fn(),
     };
-    const emitToSocket = vi.fn();
+    const ops = createMockOps();
 
-    await handleRequestMatch(
-      socket,
-      testSessionId,
-      enqueueUser,
-      tryMatch,
-      sessionManager,
-      emitToSocket
-    );
+    await handleRequestMatch(socket, testSessionId, enqueueUser, tryMatch, sessionManager, ops);
 
-    expect(enqueueUser).toHaveBeenCalledWith(testSessionId);
     expect(socket.emit).toHaveBeenCalledWith('waiting');
     expect(tryMatch).toHaveBeenCalled();
+    expect(ops.joinSocketToRoom).not.toHaveBeenCalled();
   });
 
-  it('マッチ成立時に両ユーザーにmatchFoundイベントを発行する', async () => {
+  it('マッチ成立時に両ユーザーにmatchFoundを発行しroomにjoinする', async () => {
     const socket = createMockSocket('socket-user1-abc');
     const enqueueUser: EnqueueUser = vi.fn().mockResolvedValue(ok(undefined));
     const tryMatch: TryMatch = vi
@@ -84,50 +108,48 @@ describe('handleRequestMatch', () => {
       invalidateSession: vi.fn(),
       bindSocketToSession: vi.fn(),
     };
-    const emitToSocket = vi.fn();
+    const ops = createMockOps();
 
-    await handleRequestMatch(
-      socket,
-      user1SessionId,
-      enqueueUser,
-      tryMatch,
-      sessionManager,
-      emitToSocket
+    await handleRequestMatch(socket, user1SessionId, enqueueUser, tryMatch, sessionManager, ops);
+
+    // 両ユーザーが Socket.IO room に参加
+    expect(ops.joinSocketToRoom).toHaveBeenCalledWith(
+      user1SocketId as string,
+      testRoomId as string
     );
-
-    expect(socket.emit).toHaveBeenCalledWith('waiting');
-    // user1 に matchFound
-    expect(emitToSocket).toHaveBeenCalledWith(user1SocketId as string, 'matchFound', {
+    expect(ops.joinSocketToRoom).toHaveBeenCalledWith(
+      user2SocketId as string,
+      testRoomId as string
+    );
+    // 両ユーザーに matchFound
+    expect(ops.emitToSocket).toHaveBeenCalledWith(user1SocketId as string, 'matchFound', {
       roomId: testRoomId as string,
       partnerSessionId: user2SessionId as string,
     });
-    // user2 に matchFound
-    expect(emitToSocket).toHaveBeenCalledWith(user2SocketId as string, 'matchFound', {
+    expect(ops.emitToSocket).toHaveBeenCalledWith(user2SocketId as string, 'matchFound', {
       roomId: testRoomId as string,
       partnerSessionId: user1SessionId as string,
     });
   });
 
-  it('ALREADY_IN_QUEUEエラーの場合にerrorイベントを発行する', async () => {
+  it('ALREADY_IN_QUEUEエラーの場合にerrorイベントを発行しtryMatchは呼ばない', async () => {
     const socket = createMockSocket();
     const matchingError = new MatchingError('ALREADY_IN_QUEUE', '既にマッチング待機中です');
     const enqueueUser: EnqueueUser = vi.fn().mockResolvedValue(err(matchingError));
     const tryMatch: TryMatch = vi.fn();
-    const sessionManager = {
-      generateSession: vi.fn(),
-      getSession: vi.fn(),
-      invalidateSession: vi.fn(),
-      bindSocketToSession: vi.fn(),
-    };
-    const emitToSocket = vi.fn();
 
     await handleRequestMatch(
       socket,
       testSessionId,
       enqueueUser,
       tryMatch,
-      sessionManager,
-      emitToSocket
+      {
+        generateSession: vi.fn(),
+        getSession: vi.fn(),
+        invalidateSession: vi.fn(),
+        bindSocketToSession: vi.fn(),
+      },
+      createMockOps()
     );
 
     expect(socket.emit).toHaveBeenCalledWith('error', {
@@ -136,41 +158,135 @@ describe('handleRequestMatch', () => {
     });
     expect(tryMatch).not.toHaveBeenCalled();
   });
+});
 
-  it('QUEUE_ERRORの場合にerrorイベントを発行しtryMatchは呼ばない', async () => {
+// --- handleSendMessage ---
+describe('handleSendMessage', () => {
+  it('有効なペイロードでメッセージを送信しnewMessageをbroadcastする', async () => {
     const socket = createMockSocket();
-    const matchingError = new MatchingError('QUEUE_ERROR', 'キューエラーが発生しました');
-    const enqueueUser: EnqueueUser = vi.fn().mockResolvedValue(err(matchingError));
-    const tryMatch: TryMatch = vi.fn();
-    const sessionManager = {
-      generateSession: vi.fn(),
-      getSession: vi.fn(),
-      invalidateSession: vi.fn(),
-      bindSocketToSession: vi.fn(),
+    const result: SendMessageResult = { message: testMessage, deletedMessageId: null };
+    const messageService: MessageServiceInterface = {
+      sendMessage: vi.fn().mockResolvedValue(ok(result)),
+      deleteAllMessages: vi.fn(),
+      getMessages: vi.fn(),
     };
-    const emitToSocket = vi.fn();
+    const ops = createMockOps();
 
-    await handleRequestMatch(
+    await handleSendMessage(
       socket,
-      testSessionId,
-      enqueueUser,
-      tryMatch,
-      sessionManager,
-      emitToSocket
+      user1SessionId,
+      { roomId: testRoomId as string, text: 'テストメッセージ' },
+      messageService,
+      ops
+    );
+
+    expect(messageService.sendMessage).toHaveBeenCalled();
+    expect(ops.broadcastToRoom).toHaveBeenCalledWith(
+      testRoomId as string,
+      'newMessage',
+      expect.objectContaining({ messageId: testMessageId as string })
+    );
+  });
+
+  it('自動削除が発生した場合にmessageDeletedをbroadcastする', async () => {
+    const deletedId = MessageId('00000000-0000-4000-a000-000000000077')._unsafeUnwrap();
+    const result: SendMessageResult = { message: testMessage, deletedMessageId: deletedId };
+    const messageService: MessageServiceInterface = {
+      sendMessage: vi.fn().mockResolvedValue(ok(result)),
+      deleteAllMessages: vi.fn(),
+      getMessages: vi.fn(),
+    };
+    const ops = createMockOps();
+
+    await handleSendMessage(
+      createMockSocket(),
+      user1SessionId,
+      { roomId: testRoomId as string, text: 'テスト' },
+      messageService,
+      ops
+    );
+
+    expect(ops.broadcastToRoom).toHaveBeenCalledWith(testRoomId as string, 'messageDeleted', {
+      messageId: deletedId as string,
+    });
+  });
+
+  it('無効なroomIdの場合にerrorイベントを発行する', async () => {
+    const socket = createMockSocket();
+    const messageService: MessageServiceInterface = {
+      sendMessage: vi.fn(),
+      deleteAllMessages: vi.fn(),
+      getMessages: vi.fn(),
+    };
+
+    await handleSendMessage(
+      socket,
+      user1SessionId,
+      { roomId: 'invalid-room-id', text: 'テスト' },
+      messageService,
+      createMockOps()
+    );
+
+    expect(socket.emit).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(messageService.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('空のtextの場合にerrorイベントを発行する', async () => {
+    const socket = createMockSocket();
+    const messageService: MessageServiceInterface = {
+      sendMessage: vi.fn(),
+      deleteAllMessages: vi.fn(),
+      getMessages: vi.fn(),
+    };
+
+    await handleSendMessage(
+      socket,
+      user1SessionId,
+      { roomId: testRoomId as string, text: '' },
+      messageService,
+      createMockOps()
+    );
+
+    expect(socket.emit).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(messageService.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('MessageServiceがエラーを返した場合にerrorイベントを発行する', async () => {
+    const socket = createMockSocket();
+    const messageError = new MessageError('MESSAGE_ROOM_NOT_FOUND', 'ルームが見つかりません');
+    const messageService: MessageServiceInterface = {
+      sendMessage: vi.fn().mockResolvedValue(err(messageError)),
+      deleteAllMessages: vi.fn(),
+      getMessages: vi.fn(),
+    };
+
+    await handleSendMessage(
+      socket,
+      user1SessionId,
+      { roomId: testRoomId as string, text: 'テスト' },
+      messageService,
+      createMockOps()
     );
 
     expect(socket.emit).toHaveBeenCalledWith('error', {
-      code: 'QUEUE_ERROR',
-      message: 'キューエラーが発生しました',
+      code: 'MESSAGE_ROOM_NOT_FOUND',
+      message: 'ルームが見つかりません',
     });
-    expect(tryMatch).not.toHaveBeenCalled();
   });
 });
 
+// --- handleConnection ---
 describe('handleConnection', () => {
   let sessionManager: SessionManagerInterface;
   let enqueueUser: EnqueueUser;
   let tryMatch: TryMatch;
+  let messageService: MessageServiceInterface;
 
   beforeEach(() => {
     sessionManager = {
@@ -181,13 +297,23 @@ describe('handleConnection', () => {
     };
     enqueueUser = vi.fn().mockResolvedValue(ok(undefined));
     tryMatch = vi.fn().mockResolvedValue(ok(null));
+    messageService = {
+      sendMessage: vi.fn().mockResolvedValue(ok({ message: testMessage, deletedMessageId: null })),
+      deleteAllMessages: vi.fn(),
+      getMessages: vi.fn(),
+    };
   });
 
   it('接続時にセッションを生成する', () => {
     const socket = createMockSocket();
-
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, vi.fn());
-
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      tryMatch,
+      messageService,
+      createMockOps()
+    );
     expect(sessionManager.generateSession).toHaveBeenCalledWith(expect.any(String));
   });
 
@@ -196,7 +322,14 @@ describe('handleConnection', () => {
     const sessionError = new SessionError('SESSION_NOT_FOUND', 'セッション生成に失敗しました');
     vi.mocked(sessionManager.generateSession).mockReturnValue(err(sessionError));
 
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, vi.fn());
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      tryMatch,
+      messageService,
+      createMockOps()
+    );
 
     expect(socket.emit).toHaveBeenCalledWith('error', {
       code: 'SESSION_ERROR',
@@ -205,36 +338,37 @@ describe('handleConnection', () => {
     expect(socket.disconnect).toHaveBeenCalled();
   });
 
-  it('requestMatchイベントリスナーを登録する', () => {
+  it('requestMatch・sendMessage・disconnectイベントリスナーを登録する', () => {
     const socket = createMockSocket();
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      tryMatch,
+      messageService,
+      createMockOps()
+    );
 
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, vi.fn());
-
-    const onCalls = vi.mocked(socket.on).mock.calls;
-    const eventNames = onCalls.map(([event]) => event);
+    const eventNames = vi.mocked(socket.on).mock.calls.map(([event]) => event);
     expect(eventNames).toContain('requestMatch');
-  });
-
-  it('disconnectイベントリスナーを登録する', () => {
-    const socket = createMockSocket();
-
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, vi.fn());
-
-    const onCalls = vi.mocked(socket.on).mock.calls;
-    const eventNames = onCalls.map(([event]) => event);
+    expect(eventNames).toContain('sendMessage');
     expect(eventNames).toContain('disconnect');
   });
 
   it('disconnect時にセッションを無効化する', () => {
     const socket = createMockSocket();
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      tryMatch,
+      messageService,
+      createMockOps()
+    );
 
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, vi.fn());
-
-    const onCalls = vi.mocked(socket.on).mock.calls;
-    const disconnectCall = onCalls.find(([event]) => event === 'disconnect');
-    expect(disconnectCall).toBeDefined();
-
-    const disconnectHandler = disconnectCall?.[1] as () => void;
+    const disconnectHandler = vi
+      .mocked(socket.on)
+      .mock.calls.find(([event]) => event === 'disconnect')?.[1] as () => void;
     disconnectHandler();
 
     expect(sessionManager.invalidateSession).toHaveBeenCalledWith(testSessionId);
@@ -242,17 +376,39 @@ describe('handleConnection', () => {
 
   it('requestMatchイベント受信時にenqueueUserを呼び出しwaitingを発行する', async () => {
     const socket = createMockSocket();
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      tryMatch,
+      messageService,
+      createMockOps()
+    );
 
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, vi.fn());
-
-    const onCalls = vi.mocked(socket.on).mock.calls;
-    const requestMatchCall = onCalls.find(([event]) => event === 'requestMatch');
-    expect(requestMatchCall).toBeDefined();
-
-    const requestMatchHandler = requestMatchCall?.[1] as () => Promise<void>;
+    const requestMatchHandler = vi
+      .mocked(socket.on)
+      .mock.calls.find(([event]) => event === 'requestMatch')?.[1] as () => Promise<void>;
     await requestMatchHandler();
 
     expect(enqueueUser).toHaveBeenCalledWith(testSessionId);
     expect(socket.emit).toHaveBeenCalledWith('waiting');
+  });
+
+  it('sendMessageイベント受信時にbroadcastToRoomが呼ばれる', async () => {
+    const socket = createMockSocket();
+    const ops = createMockOps();
+    handleConnection(socket, sessionManager, enqueueUser, tryMatch, messageService, ops);
+
+    const sendMessageHandler = vi
+      .mocked(socket.on)
+      .mock.calls.find(([event]) => event === 'sendMessage')?.[1] as (p: unknown) => Promise<void>;
+    await sendMessageHandler({ roomId: testRoomId as string, text: 'テスト' });
+
+    expect(messageService.sendMessage).toHaveBeenCalled();
+    expect(ops.broadcastToRoom).toHaveBeenCalledWith(
+      testRoomId as string,
+      'newMessage',
+      expect.any(Object)
+    );
   });
 });
