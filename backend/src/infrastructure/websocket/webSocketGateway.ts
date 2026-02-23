@@ -1,7 +1,11 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import type { Socket } from 'socket.io';
-import type { EnqueueUser, TryMatch } from '../../application/interfaces/matchingServiceInterface';
+import type {
+  DequeueUser,
+  EnqueueUser,
+  TryMatch,
+} from '../../application/interfaces/matchingServiceInterface';
 import type { MessageServiceInterface } from '../../application/interfaces/messageServiceInterface';
 import type { SessionManagerInterface } from '../../application/interfaces/sessionManagerInterface';
 import type { SessionId } from '../../domain/types/valueObjects';
@@ -106,7 +110,7 @@ export async function handleSendMessage(
   });
 
   if (deletedMessageId !== null) {
-    ops.broadcastToRoom(payload.roomId, 'messageDeleted', {
+    socket.emit('messageDeleted', {
       messageId: deletedMessageId as string,
     });
   }
@@ -114,12 +118,13 @@ export async function handleSendMessage(
 
 /**
  * WebSocket接続イベントのハンドラ
- * 接続時にセッションを生成し、requestMatch・sendMessage・disconnectイベントを登録する
+ * 接続時にセッションを生成し、requestMatch・sendMessage・leaveRoom・disconnectイベントを登録する
  */
 export function handleConnection(
   socket: Pick<Socket, 'id' | 'data' | 'emit' | 'on' | 'disconnect'>,
   sessionManager: SessionManagerInterface,
   enqueueUser: EnqueueUser,
+  dequeueUser: DequeueUser,
   tryMatch: TryMatch,
   messageService: MessageServiceInterface,
   ops: SocketOperations
@@ -140,6 +145,9 @@ export function handleConnection(
 
   const session = sessionResult.value;
 
+  // クライアントに自分のセッションIDを通知する
+  socket.emit('sessionCreated', { sessionId: session.sessionId as string });
+
   socket.on('requestMatch', async () => {
     await handleRequestMatch(socket, session.sessionId, enqueueUser, tryMatch, sessionManager, ops);
   });
@@ -148,7 +156,19 @@ export function handleConnection(
     await handleSendMessage(socket, session.sessionId, payload, messageService, ops);
   });
 
-  socket.on('disconnect', () => {
+  socket.on('leaveRoom', async (payload: { roomId: string }) => {
+    const roomIdResult = RoomId(payload.roomId);
+    if (roomIdResult.isErr()) return;
+
+    ops.broadcastToRoom(payload.roomId, 'roomClosed', {
+      roomId: payload.roomId,
+      reason: 'user_left',
+    });
+    await messageService.deleteAllMessages(roomIdResult.value);
+  });
+
+  socket.on('disconnect', async () => {
+    await dequeueUser(session.sessionId);
     sessionManager.invalidateSession(session.sessionId);
   });
 }
@@ -161,6 +181,7 @@ export function createWebSocketGateway(
   httpServer: HttpServer,
   sessionManager: SessionManagerInterface,
   enqueueUser: EnqueueUser,
+  dequeueUser: DequeueUser,
   tryMatch: TryMatch,
   messageService: MessageServiceInterface
 ): Server {
@@ -181,7 +202,7 @@ export function createWebSocketGateway(
   };
 
   io.on('connection', (socket: Socket) => {
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, messageService, ops);
+    handleConnection(socket, sessionManager, enqueueUser, dequeueUser, tryMatch, messageService, ops);
   });
 
   return io;
