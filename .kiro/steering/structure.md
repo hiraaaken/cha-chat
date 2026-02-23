@@ -2,40 +2,68 @@
 
 ## モノレポ構成
 
-このプロジェクトはモノレポとして管理されます。
+このプロジェクトはpnpm workspaceで管理されるモノレポ。
 
 ```
 cha-chat/
 ├── frontend/
-│   ├── web/       # Webブラウザ版フロントエンド
-│   └── mobile/    # モバイルアプリ版フロントエンド
-└── backend/       # バックエンドアプリケーション
+│   ├── web/              # Webブラウザ版フロントエンド（Svelte）
+│   └── mobile/           # モバイルアプリ版フロントエンド（Flutter）
+├── backend/              # バックエンドアプリケーション（Hono + Socket.IO）
+├── packages/
+│   └── shared-types/     # フロント・バックエンド共通の型定義
+└── tests/                # 統合テスト・E2Eテスト
 ```
 
-## ディレクトリ構成
+## バックエンド構成（DDD レイヤー）
 
-### frontend/web/
-- Webブラウザ版ユーザーインターフェース
-- Svelte による実装
-- レスポンシブデザイン
-- WebSocket クライアント
+`backend/src/` はDomain-Driven Designで3層に分離:
 
-### frontend/mobile/
-- モバイルアプリ版ユーザーインターフェース
-- Flutter による実装
-- iOS/Android ネイティブアプリ
-- WebSocket クライアント
+```
+backend/src/
+├── domain/           # 純粋なビジネスロジック（副作用なし）
+│   ├── entities/     # チャットルーム、メッセージ、セッション等
+│   ├── events/       # ドメインイベント定義
+│   └── types/        # 値オブジェクト（RoomId, SessionId 等）、エラー型
+├── application/      # ユースケース・ワークフロー
+│   ├── interfaces/   # インフラへの依存インターフェース
+│   ├── services/     # Workflow関数（1ファイル=1ワークフロー）
+│   └── types/        # Workflow<I,O,E> 型定義
+├── infrastructure/   # 外部依存の実装（DB、WebSocket、HTTP）
+│   ├── websocket/    # Socket.IO ゲートウェイ（純粋なハンドラ関数群）
+│   └── http/         # Hono サーバー
+├── db/               # Drizzle ORM スキーマ・接続
+└── index.ts          # エントリポイント（依存性注入）
+```
 
-### backend/
-- API サーバー
-- WebSocket サーバー
-- マッチングロジック
-- チャットルーム管理
-- メッセージ管理
+**パターン**: インフラ層のエントリポイントでDIを行い、ApplicationサービスはWorkflow型のファクトリ関数として実装。
+
+## フロントエンド構成（Web版）
+
+```
+frontend/web/src/
+├── components/       # Svelte コンポーネント（画面単位）
+│   ├── MatchingScreen.svelte
+│   ├── ChatScreen.svelte
+│   └── ChatEndScreen.svelte
+└── lib/
+    ├── websocket/    # Socket.IO クライアントラッパー（シングルトン）
+    └── stores/       # Svelte Store による状態管理
+        ├── connectionStore  # 接続状態・セッションID
+        ├── matchingStore    # マッチング待機状態
+        ├── chatStore        # チャットルーム・タイマー
+        └── messageStore     # メッセージ一覧
+```
+
+## 共有型パッケージ
+
+`packages/shared-types` (`@cha-chat/shared-types`) でフロント・バックエンド間のWebSocketイベント型を共有:
+- クライアント→サーバーイベントのペイロード型
+- サーバー→クライアントイベントのペイロード型
+- `WebSocketEvents` 定数（イベント名の一元管理）
 
 ## 開発方針
-- フロントエンド（Web版・モバイル版）とバックエンドは独立して開発可能
+- フロントエンド・バックエンドは独立して開発可能
 - Web版とモバイル版は同一のバックエンドAPIを使用
-- 共通の型定義やユーティリティは適切に共有
-- 各ディレクトリに独自の依存関係管理を持つ
-- UI/UXはWeb版とモバイル版で一貫性を保つ
+- イベント型の変更は `shared-types` パッケージを通じて両端に伝播
+- 各ワークスペースパッケージは独自の依存関係管理を持つ
