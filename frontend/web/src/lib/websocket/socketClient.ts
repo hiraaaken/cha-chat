@@ -13,7 +13,14 @@ import {
 } from '@cha-chat/shared-types';
 import { io } from 'socket.io-client';
 import type { Socket } from 'socket.io-client';
-import { activate, close, updateRemainingSeconds } from '../stores/chatStore.svelte';
+import {
+  activate,
+  chatStore,
+  close,
+  selfLeave,
+  startCountdown,
+  updateRemainingSeconds,
+} from '../stores/chatStore.svelte';
 import { setConnected, setDisconnected, setError } from '../stores/connectionStore.svelte';
 import { matched, startWaiting } from '../stores/matchingStore.svelte';
 import { addMessage, clearMessages, removeMessage } from '../stores/messageStore.svelte';
@@ -80,6 +87,7 @@ function registerEventHandlers(s: Socket): void {
   s.on(WebSocketEvents.MATCH_FOUND, (payload: MatchFoundPayload) => {
     matched();
     activate(payload.roomId);
+    startCountdown();
   });
 
   s.on(WebSocketEvents.NEW_MESSAGE, (payload: NewMessagePayload) => {
@@ -96,6 +104,7 @@ function registerEventHandlers(s: Socket): void {
   });
 
   s.on(WebSocketEvents.ROOM_CLOSED, (payload: RoomClosedPayload) => {
+    if (chatStore.roomStatus === 'closed') return;
     close(payload.reason);
     clearMessages();
   });
@@ -119,6 +128,7 @@ export function sendMessage(roomId: string, text: string): void {
 }
 
 export function leaveRoom(roomId: string): void {
+  selfLeave();
   const payload: LeaveRoomPayload = { roomId };
   getSocket().emit(WebSocketEvents.LEAVE_ROOM, payload);
 }

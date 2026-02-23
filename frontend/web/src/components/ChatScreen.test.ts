@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetChatStore, chatStore, activate } from '../lib/stores/chatStore.svelte';
 import { resetConnectionStore, setConnected } from '../lib/stores/connectionStore.svelte';
-import { messageStore, clearMessages, addMessage } from '../lib/stores/messageStore.svelte';
+import { clearMessages, addMessage } from '../lib/stores/messageStore.svelte';
 import ChatScreen from './ChatScreen.svelte';
 
 vi.mock('../lib/websocket', () => ({
@@ -43,6 +43,22 @@ describe('ChatScreen', () => {
       render(ChatScreen);
 
       expect(screen.getByText('00:00')).toBeInTheDocument();
+    });
+
+    it('残り60秒未満で警告スタイルが適用される', () => {
+      chatStore.remainingSeconds = 59;
+      render(ChatScreen);
+
+      const timer = screen.getByText('00:59');
+      expect(timer.classList.contains('timer-warning')).toBe(true);
+    });
+
+    it('残り60秒以上では警告スタイルが適用されない', () => {
+      chatStore.remainingSeconds = 60;
+      render(ChatScreen);
+
+      const timer = screen.getByText('01:00');
+      expect(timer.classList.contains('timer-warning')).toBe(false);
     });
   });
 

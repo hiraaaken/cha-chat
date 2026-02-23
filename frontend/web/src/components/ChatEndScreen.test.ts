@@ -46,6 +46,13 @@ describe('ChatEndScreen', () => {
       expect(screen.getByText(/相手が退出/)).toBeInTheDocument();
     });
 
+    it('self_left のとき自分退出メッセージを表示する', () => {
+      chatStore.closeReason = 'self_left';
+      render(ChatEndScreen);
+
+      expect(screen.getByText(/チャットを終了しました/)).toBeInTheDocument();
+    });
+
     it('reported のとき報告メッセージを表示する', () => {
       chatStore.closeReason = 'reported';
       render(ChatEndScreen);
