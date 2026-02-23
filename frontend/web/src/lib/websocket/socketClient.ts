@@ -7,6 +7,7 @@ import {
   type ReportContentPayload,
   type RoomClosedPayload,
   type SendMessagePayload,
+  type SessionCreatedPayload,
   type TimerUpdatePayload,
   WebSocketEvents,
 } from '@cha-chat/shared-types';
@@ -57,7 +58,11 @@ export function disconnect(): void {
 
 function registerEventHandlers(s: Socket): void {
   s.on('connect', () => {
-    setConnected(s.id ?? '');
+    // セッションIDはサーバーから sessionCreated イベントで受け取る
+  });
+
+  s.on(WebSocketEvents.SESSION_CREATED, (payload: SessionCreatedPayload) => {
+    setConnected(payload.sessionId);
   });
 
   s.on('disconnect', () => {

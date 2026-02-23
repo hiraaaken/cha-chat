@@ -5,6 +5,7 @@ import type {
   MessageDeletedPayload,
   NewMessagePayload,
   RoomClosedPayload,
+  SessionCreatedPayload,
   TimerUpdatePayload,
 } from '@cha-chat/shared-types';
 import * as chatStore from '../stores/chatStore.svelte';
@@ -79,7 +80,7 @@ describe('socketClient', () => {
       connect();
 
       expect(io).toHaveBeenCalledWith(
-        '/',
+        expect.any(String),
         expect.objectContaining({
           autoConnect: false,
           reconnection: true,
@@ -133,10 +134,11 @@ describe('socketClient', () => {
       return mod;
     }
 
-    it('connect イベントで setConnected を呼ぶ', async () => {
+    it('sessionCreated イベントでサーバーのセッションIDを setConnected に渡す', async () => {
       await setup();
-      triggerEvent('connect');
-      expect(connectionStore.setConnected).toHaveBeenCalledWith('test-socket-id');
+      const payload: SessionCreatedPayload = { sessionId: 'server-session-uuid' };
+      triggerEvent(WebSocketEvents.SESSION_CREATED, payload);
+      expect(connectionStore.setConnected).toHaveBeenCalledWith('server-session-uuid');
     });
 
     it('disconnect イベントで setDisconnected を呼ぶ', async () => {

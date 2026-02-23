@@ -1,6 +1,10 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EnqueueUser, TryMatch } from '../../application/interfaces/matchingServiceInterface';
+import type {
+  DequeueUser,
+  EnqueueUser,
+  TryMatch,
+} from '../../application/interfaces/matchingServiceInterface';
 import type {
   MessageServiceInterface,
   SendMessageResult,
@@ -188,9 +192,10 @@ describe('handleSendMessage', () => {
     );
   });
 
-  it('自動削除が発生した場合にmessageDeletedをbroadcastする', async () => {
+  it('自動削除が発生した場合にmessageDeletedを送信者のみに発行する', async () => {
     const deletedId = MessageId('00000000-0000-4000-a000-000000000077')._unsafeUnwrap();
     const result: SendMessageResult = { message: testMessage, deletedMessageId: deletedId };
+    const socket = createMockSocket();
     const messageService: MessageServiceInterface = {
       sendMessage: vi.fn().mockResolvedValue(ok(result)),
       deleteAllMessages: vi.fn(),
@@ -199,16 +204,23 @@ describe('handleSendMessage', () => {
     const ops = createMockOps();
 
     await handleSendMessage(
-      createMockSocket(),
+      socket,
       user1SessionId,
       { roomId: testRoomId as string, text: 'テスト' },
       messageService,
       ops
     );
 
-    expect(ops.broadcastToRoom).toHaveBeenCalledWith(testRoomId as string, 'messageDeleted', {
+    // 送信者のみに messageDeleted を発行する
+    expect(socket.emit).toHaveBeenCalledWith('messageDeleted', {
       messageId: deletedId as string,
     });
+    // room 全体にはbroadcastしない
+    expect(ops.broadcastToRoom).not.toHaveBeenCalledWith(
+      testRoomId as string,
+      'messageDeleted',
+      expect.any(Object)
+    );
   });
 
   it('無効なroomIdの場合にerrorイベントを発行する', async () => {
@@ -285,6 +297,7 @@ describe('handleSendMessage', () => {
 describe('handleConnection', () => {
   let sessionManager: SessionManagerInterface;
   let enqueueUser: EnqueueUser;
+  let dequeueUser: DequeueUser;
   let tryMatch: TryMatch;
   let messageService: MessageServiceInterface;
 
@@ -296,25 +309,30 @@ describe('handleConnection', () => {
       bindSocketToSession: vi.fn().mockReturnValue(ok(undefined)),
     };
     enqueueUser = vi.fn().mockResolvedValue(ok(undefined));
+    dequeueUser = vi.fn().mockResolvedValue(ok(undefined));
     tryMatch = vi.fn().mockResolvedValue(ok(null));
     messageService = {
       sendMessage: vi.fn().mockResolvedValue(ok({ message: testMessage, deletedMessageId: null })),
-      deleteAllMessages: vi.fn(),
+      deleteAllMessages: vi.fn().mockResolvedValue(ok(undefined)),
       getMessages: vi.fn(),
     };
   });
 
-  it('接続時にセッションを生成する', () => {
+  it('接続時にセッションを生成しsessionCreatedを発行する', () => {
     const socket = createMockSocket();
     handleConnection(
       socket,
       sessionManager,
       enqueueUser,
+      dequeueUser,
       tryMatch,
       messageService,
       createMockOps()
     );
     expect(sessionManager.generateSession).toHaveBeenCalledWith(expect.any(String));
+    expect(socket.emit).toHaveBeenCalledWith('sessionCreated', {
+      sessionId: testSessionId as string,
+    });
   });
 
   it('セッション生成失敗時にerrorイベントを発行してdisconnectする', () => {
@@ -326,6 +344,7 @@ describe('handleConnection', () => {
       socket,
       sessionManager,
       enqueueUser,
+      dequeueUser,
       tryMatch,
       messageService,
       createMockOps()
@@ -338,12 +357,13 @@ describe('handleConnection', () => {
     expect(socket.disconnect).toHaveBeenCalled();
   });
 
-  it('requestMatch・sendMessage・disconnectイベントリスナーを登録する', () => {
+  it('requestMatch・sendMessage・leaveRoom・disconnectイベントリスナーを登録する', () => {
     const socket = createMockSocket();
     handleConnection(
       socket,
       sessionManager,
       enqueueUser,
+      dequeueUser,
       tryMatch,
       messageService,
       createMockOps()
@@ -352,15 +372,17 @@ describe('handleConnection', () => {
     const eventNames = vi.mocked(socket.on).mock.calls.map(([event]) => event);
     expect(eventNames).toContain('requestMatch');
     expect(eventNames).toContain('sendMessage');
+    expect(eventNames).toContain('leaveRoom');
     expect(eventNames).toContain('disconnect');
   });
 
-  it('disconnect時にセッションを無効化する', () => {
+  it('disconnect時にdequeueUserとinvalidateSessionを呼び出す', async () => {
     const socket = createMockSocket();
     handleConnection(
       socket,
       sessionManager,
       enqueueUser,
+      dequeueUser,
       tryMatch,
       messageService,
       createMockOps()
@@ -368,9 +390,10 @@ describe('handleConnection', () => {
 
     const disconnectHandler = vi
       .mocked(socket.on)
-      .mock.calls.find(([event]) => event === 'disconnect')?.[1] as () => void;
-    disconnectHandler();
+      .mock.calls.find(([event]) => event === 'disconnect')?.[1] as () => Promise<void>;
+    await disconnectHandler();
 
+    expect(dequeueUser).toHaveBeenCalledWith(testSessionId);
     expect(sessionManager.invalidateSession).toHaveBeenCalledWith(testSessionId);
   });
 
@@ -380,6 +403,7 @@ describe('handleConnection', () => {
       socket,
       sessionManager,
       enqueueUser,
+      dequeueUser,
       tryMatch,
       messageService,
       createMockOps()
@@ -397,7 +421,7 @@ describe('handleConnection', () => {
   it('sendMessageイベント受信時にbroadcastToRoomが呼ばれる', async () => {
     const socket = createMockSocket();
     const ops = createMockOps();
-    handleConnection(socket, sessionManager, enqueueUser, tryMatch, messageService, ops);
+    handleConnection(socket, sessionManager, enqueueUser, dequeueUser, tryMatch, messageService, ops);
 
     const sendMessageHandler = vi
       .mocked(socket.on)
@@ -410,5 +434,22 @@ describe('handleConnection', () => {
       'newMessage',
       expect.any(Object)
     );
+  });
+
+  it('leaveRoomイベント受信時にroomClosedをbroadcastしメッセージを削除する', async () => {
+    const socket = createMockSocket();
+    const ops = createMockOps();
+    handleConnection(socket, sessionManager, enqueueUser, dequeueUser, tryMatch, messageService, ops);
+
+    const leaveRoomHandler = vi
+      .mocked(socket.on)
+      .mock.calls.find(([event]) => event === 'leaveRoom')?.[1] as (p: unknown) => Promise<void>;
+    await leaveRoomHandler({ roomId: testRoomId as string });
+
+    expect(ops.broadcastToRoom).toHaveBeenCalledWith(testRoomId as string, 'roomClosed', {
+      roomId: testRoomId as string,
+      reason: 'user_left',
+    });
+    expect(messageService.deleteAllMessages).toHaveBeenCalledWith(testRoomId);
   });
 });

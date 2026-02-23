@@ -65,6 +65,11 @@ export interface TimerUpdatePayload {
   remainingSeconds: number;
 }
 
+// セッション作成完了（接続直後にサーバーから通知）
+export interface SessionCreatedPayload {
+  sessionId: string;
+}
+
 // エラー
 export interface ErrorPayload {
   code: string;
@@ -82,6 +87,7 @@ export const WebSocketEvents = {
   REPORT_CONTENT: 'reportContent',
 
   // Server to Client
+  SESSION_CREATED: 'sessionCreated',
   WAITING: 'waiting',
   MATCH_FOUND: 'matchFound',
   NEW_MESSAGE: 'newMessage',
