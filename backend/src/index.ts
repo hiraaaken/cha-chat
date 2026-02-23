@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from 'node:http';
 import { serve } from '@hono/node-server';
+import { createDequeueUser } from './application/services/dequeueUser';
 import { createEnqueueUser } from './application/services/enqueueUser';
 import { createTryMatch } from './application/services/tryMatch';
 import { createHonoServer } from './infrastructure/http/honoServer';
@@ -37,6 +38,7 @@ const matchingQueue = new InMemoryMatchingQueue();
 const roomManager = new InMemoryRoomManager();
 const messageService = new InMemoryMessageService();
 const enqueueUser = createEnqueueUser(matchingQueue);
+const dequeueUser = createDequeueUser(matchingQueue);
 const tryMatch = createTryMatch(matchingQueue, roomManager);
 
 // WebSocket Gatewayの起動
@@ -45,6 +47,7 @@ createWebSocketGateway(
   httpServer as HttpServer,
   sessionManager,
   enqueueUser,
+  dequeueUser,
   tryMatch,
   messageService
 );
