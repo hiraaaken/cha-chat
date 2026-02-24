@@ -28,7 +28,7 @@ export function startCountdown() {
   stopCountdown();
   countdownIntervalId = setInterval(() => {
     if (chatStore.remainingSeconds <= 0) {
-      stopCountdown();
+      close('timeout');
       return;
     }
     chatStore.remainingSeconds -= 1;

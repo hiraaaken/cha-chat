@@ -78,7 +78,9 @@
     <ul class="message-list">
       {#each messageStore.messages as message (message.messageId)}
         <li
-          class="message-item {isOwnMessage(message.senderSessionId) ? 'own' : 'other'}"
+          class="message-item"
+          class:own={isOwnMessage(message.senderSessionId)}
+          class:other={!isOwnMessage(message.senderSessionId)}
           style={getMessageStyle(message.messageId, message.senderSessionId)}
         >
           <div class="bubble">
@@ -178,10 +180,12 @@
 
   .message-item.own {
     justify-content: flex-end;
+    margin-left: auto;
   }
 
   .message-item.other {
     justify-content: flex-start;
+    margin-right: auto;
   }
 
   .bubble {

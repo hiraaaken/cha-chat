@@ -53,7 +53,7 @@ describe('chatStore', () => {
       expect(chatStore.remainingSeconds).toBe(597);
     });
 
-    it('remainingSecondsが0になったらカウントダウンが停止する', () => {
+    it('remainingSecondsが0になったらtimeoutでcloseされる', () => {
       activate('room-123');
       chatStore.remainingSeconds = 2;
       startCountdown();
@@ -61,6 +61,8 @@ describe('chatStore', () => {
       vi.advanceTimersByTime(5000);
 
       expect(chatStore.remainingSeconds).toBe(0);
+      expect(chatStore.roomStatus).toBe('closed');
+      expect(chatStore.closeReason).toBe('timeout');
     });
 
     it('stopCountdownでカウントダウンが停止する', () => {
