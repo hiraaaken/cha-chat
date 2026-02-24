@@ -39,15 +39,30 @@
     return senderSessionId === connectionStore.sessionId;
   }
 
-  function getMessageOpacity(messageId: string, senderSessionId: string): number {
+  interface DepthStyle {
+    opacity: number;
+    scale: number;
+  }
+
+  const DEPTH_STYLES: DepthStyle[] = [
+    { opacity: 1.0, scale: 1.0 },
+    { opacity: 0.45, scale: 0.88 },
+    { opacity: 0.2, scale: 0.78 },
+  ];
+
+  function getDepthIndex(messageId: string, senderSessionId: string): number {
     const senderMessages = messageStore.messages.filter(
       (m) => m.senderSessionId === senderSessionId,
     );
-    const reversedIndex = [...senderMessages].reverse().findIndex(
-      (m) => m.messageId === messageId,
-    );
-    const opacityMap = [1.0, 0.5, 0.3];
-    return opacityMap[reversedIndex] ?? 0.3;
+    const reversed = [...senderMessages].reverse();
+    const idx = reversed.findIndex((m) => m.messageId === messageId);
+    return Math.min(idx, DEPTH_STYLES.length - 1);
+  }
+
+  function getMessageStyle(messageId: string, senderSessionId: string): string {
+    const idx = getDepthIndex(messageId, senderSessionId);
+    const { opacity, scale } = DEPTH_STYLES[idx];
+    return `opacity: ${opacity}; transform: scale(${scale}); transform-origin: ${isOwnMessage(senderSessionId) ? 'right' : 'left'} bottom;`;
   }
 </script>
 
@@ -64,7 +79,7 @@
       {#each messageStore.messages as message (message.messageId)}
         <li
           class="message-item {isOwnMessage(message.senderSessionId) ? 'own' : 'other'}"
-          style="opacity: {getMessageOpacity(message.messageId, message.senderSessionId)};"
+          style={getMessageStyle(message.messageId, message.senderSessionId)}
         >
           <div class="bubble">
             <span class="message-text">{message.text}</span>
@@ -148,7 +163,7 @@
   .message-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
     list-style: none;
     margin: 0 auto;
     padding: 0;
@@ -158,7 +173,7 @@
 
   .message-item {
     display: flex;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.4s ease, transform 0.4s ease;
   }
 
   .message-item.own {
@@ -171,7 +186,7 @@
 
   .bubble {
     position: relative;
-    max-width: 80%;
+    max-width: 85%;
     padding: 0.625rem 0.875rem;
     border-radius: 1rem;
     font-size: 0.9375rem;
