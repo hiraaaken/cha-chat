@@ -41,12 +41,12 @@ describe('connectionStore', () => {
   });
 
   describe('setDisconnected', () => {
-    it('disconnected状態に遷移し、sessionIdがクリアされる', () => {
+    it('disconnected状態に遷移し、sessionIdは保持される', () => {
       setConnected('session-abc');
       setDisconnected();
 
       expect(connectionStore.status).toBe('disconnected');
-      expect(connectionStore.sessionId).toBeNull();
+      expect(connectionStore.sessionId).toBe('session-abc');
     });
   });
 

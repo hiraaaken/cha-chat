@@ -25,7 +25,6 @@ export function setConnected(sessionId: string) {
 
 export function setDisconnected() {
   connectionStore.status = 'disconnected';
-  connectionStore.sessionId = null;
 }
 
 export function setError(message: string) {
