@@ -40,7 +40,9 @@ const enqueueUser = createEnqueueUser(matchingQueue);
 const dequeueUser = createDequeueUser(matchingQueue);
 
 // broadcast遅延バインディングパターン（循環依存を回避）
-// roomManager が broadcast を呼ぶ時点では io が確定していることを保証する
+// roomManager → broadcast → io → roomManager の循環を断ち切るため、
+// クロージャが変数バインディングをキャプチャする性質を利用して io 確定後に差し替える。
+// NOTE: let は再代入が構造上避けられないため例外的に使用
 let ioBroadcast: (roomId: string, event: string, payload: unknown) => void = () => {};
 
 const roomManager = new InMemoryRoomManager(
