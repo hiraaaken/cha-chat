@@ -9,6 +9,7 @@ import type {
   MessageServiceInterface,
   SendMessageResult,
 } from '../../application/interfaces/messageServiceInterface';
+import type { RoomManagerInterface } from '../../application/interfaces/roomManagerInterface';
 import type { SessionManagerInterface } from '../../application/interfaces/sessionManagerInterface';
 import type { Message } from '../../domain/entities/message';
 import type { Session } from '../../domain/entities/session';
@@ -72,6 +73,16 @@ function createMockOps() {
     emitToSocket: vi.fn(),
     joinSocketToRoom: vi.fn(),
     broadcastToRoom: vi.fn(),
+  };
+}
+
+function createMockRoomManager(): RoomManagerInterface {
+  return {
+    createRoom: vi.fn().mockResolvedValue(ok(testRoomId)),
+    closeRoom: vi.fn().mockResolvedValue(ok(undefined)),
+    getRoom: vi.fn().mockReturnValue(ok({ _tag: 'ActiveChatRoom', id: testRoomId })),
+    getRoomBySessionId: vi.fn().mockReturnValue(err({ code: 'ROOM_NOT_FOUND' })),
+    handleUserDisconnect: vi.fn().mockResolvedValue(ok(undefined)),
   };
 }
 
@@ -300,6 +311,7 @@ describe('handleConnection', () => {
   let dequeueUser: DequeueUser;
   let tryMatch: TryMatch;
   let messageService: MessageServiceInterface;
+  let roomManager: RoomManagerInterface;
 
   beforeEach(() => {
     sessionManager = {
@@ -316,6 +328,7 @@ describe('handleConnection', () => {
       deleteAllMessages: vi.fn().mockResolvedValue(ok(undefined)),
       getMessages: vi.fn(),
     };
+    roomManager = createMockRoomManager();
   });
 
   it('接続時にセッションを生成しsessionCreatedを発行する', () => {
@@ -327,6 +340,7 @@ describe('handleConnection', () => {
       dequeueUser,
       tryMatch,
       messageService,
+      roomManager,
       createMockOps()
     );
     expect(sessionManager.generateSession).toHaveBeenCalledWith(expect.any(String));
@@ -347,6 +361,7 @@ describe('handleConnection', () => {
       dequeueUser,
       tryMatch,
       messageService,
+      roomManager,
       createMockOps()
     );
 
@@ -366,6 +381,7 @@ describe('handleConnection', () => {
       dequeueUser,
       tryMatch,
       messageService,
+      roomManager,
       createMockOps()
     );
 
@@ -378,6 +394,11 @@ describe('handleConnection', () => {
 
   it('disconnect時にdequeueUserとinvalidateSessionを呼び出す', async () => {
     const socket = createMockSocket();
+    // roomに入っていない状態（getRoomBySessionId が err を返す）
+    vi.mocked(roomManager.getRoomBySessionId).mockReturnValue(
+      err(new Error('ROOM_NOT_FOUND') as never)
+    );
+
     handleConnection(
       socket,
       sessionManager,
@@ -385,6 +406,7 @@ describe('handleConnection', () => {
       dequeueUser,
       tryMatch,
       messageService,
+      roomManager,
       createMockOps()
     );
 
@@ -397,6 +419,37 @@ describe('handleConnection', () => {
     expect(sessionManager.invalidateSession).toHaveBeenCalledWith(testSessionId);
   });
 
+  it('disconnect時にroomに入っていた場合はhandleUserDisconnectを呼び出す', async () => {
+    const socket = createMockSocket();
+    const activeRoom = {
+      _tag: 'ActiveChatRoom' as const,
+      id: testRoomId,
+      user1SessionId: testSessionId,
+      user2SessionId: user2SessionId,
+      createdAt: new Date(),
+      expiresAt: new Date(),
+    };
+    vi.mocked(roomManager.getRoomBySessionId).mockReturnValue(ok(activeRoom));
+
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      dequeueUser,
+      tryMatch,
+      messageService,
+      roomManager,
+      createMockOps()
+    );
+
+    const disconnectHandler = vi
+      .mocked(socket.on)
+      .mock.calls.find(([event]) => event === 'disconnect')?.[1] as () => Promise<void>;
+    await disconnectHandler();
+
+    expect(roomManager.handleUserDisconnect).toHaveBeenCalledWith(testSessionId, testRoomId);
+  });
+
   it('requestMatchイベント受信時にenqueueUserを呼び出しwaitingを発行する', async () => {
     const socket = createMockSocket();
     handleConnection(
@@ -406,6 +459,7 @@ describe('handleConnection', () => {
       dequeueUser,
       tryMatch,
       messageService,
+      roomManager,
       createMockOps()
     );
 
@@ -421,7 +475,16 @@ describe('handleConnection', () => {
   it('sendMessageイベント受信時にbroadcastToRoomが呼ばれる', async () => {
     const socket = createMockSocket();
     const ops = createMockOps();
-    handleConnection(socket, sessionManager, enqueueUser, dequeueUser, tryMatch, messageService, ops);
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      dequeueUser,
+      tryMatch,
+      messageService,
+      roomManager,
+      ops
+    );
 
     const sendMessageHandler = vi
       .mocked(socket.on)
@@ -436,20 +499,24 @@ describe('handleConnection', () => {
     );
   });
 
-  it('leaveRoomイベント受信時にroomClosedをbroadcastしメッセージを削除する', async () => {
+  it('leaveRoomイベント受信時にroomManager.handleUserDisconnectを呼び出す', async () => {
     const socket = createMockSocket();
-    const ops = createMockOps();
-    handleConnection(socket, sessionManager, enqueueUser, dequeueUser, tryMatch, messageService, ops);
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      dequeueUser,
+      tryMatch,
+      messageService,
+      roomManager,
+      createMockOps()
+    );
 
     const leaveRoomHandler = vi
       .mocked(socket.on)
       .mock.calls.find(([event]) => event === 'leaveRoom')?.[1] as (p: unknown) => Promise<void>;
     await leaveRoomHandler({ roomId: testRoomId as string });
 
-    expect(ops.broadcastToRoom).toHaveBeenCalledWith(testRoomId as string, 'roomClosed', {
-      roomId: testRoomId as string,
-      reason: 'user_left',
-    });
-    expect(messageService.deleteAllMessages).toHaveBeenCalledWith(testRoomId);
+    expect(roomManager.handleUserDisconnect).toHaveBeenCalledWith(testSessionId, testRoomId);
   });
 });

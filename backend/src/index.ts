@@ -35,19 +35,36 @@ const httpServer = serve(
 // 依存関係の初期化
 const sessionManager = new InMemorySessionManager();
 const matchingQueue = new InMemoryMatchingQueue();
-const roomManager = new InMemoryRoomManager();
 const messageService = new InMemoryMessageService();
 const enqueueUser = createEnqueueUser(matchingQueue);
 const dequeueUser = createDequeueUser(matchingQueue);
+
+// broadcast遅延バインディングパターン（循環依存を回避）
+// roomManager → broadcast → io → roomManager の循環を断ち切るため、
+// クロージャが変数バインディングをキャプチャする性質を利用して io 確定後に差し替える。
+// NOTE: let は再代入が構造上避けられないため例外的に使用
+let ioBroadcast: (roomId: string, event: string, payload: unknown) => void = () => {};
+
+const roomManager = new InMemoryRoomManager(
+  messageService,
+  (roomId, event, payload) => ioBroadcast(roomId, event, payload)
+);
+
 const tryMatch = createTryMatch(matchingQueue, roomManager);
 
 // WebSocket Gatewayの起動
 // @hono/node-server の serve() は HTTP サーバーを返すため HttpServer にキャスト
-createWebSocketGateway(
+const io = createWebSocketGateway(
   httpServer as HttpServer,
   sessionManager,
   enqueueUser,
   dequeueUser,
   tryMatch,
-  messageService
+  messageService,
+  roomManager
 );
+
+// io確定後に実際のbroadcastをバインド
+ioBroadcast = (roomId, event, payload) => {
+  io.to(roomId).emit(event, payload);
+};

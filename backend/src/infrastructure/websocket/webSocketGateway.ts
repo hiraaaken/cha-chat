@@ -7,6 +7,7 @@ import type {
   TryMatch,
 } from '../../application/interfaces/matchingServiceInterface';
 import type { MessageServiceInterface } from '../../application/interfaces/messageServiceInterface';
+import type { RoomManagerInterface } from '../../application/interfaces/roomManagerInterface';
 import type { SessionManagerInterface } from '../../application/interfaces/sessionManagerInterface';
 import type { SessionId } from '../../domain/types/valueObjects';
 import { MessageText, RoomId, SocketId } from '../../domain/types/valueObjects';
@@ -127,6 +128,7 @@ export function handleConnection(
   dequeueUser: DequeueUser,
   tryMatch: TryMatch,
   messageService: MessageServiceInterface,
+  roomManager: RoomManagerInterface,
   ops: SocketOperations
 ): void {
   const socketIdResult = SocketId(socket.id);
@@ -159,15 +161,14 @@ export function handleConnection(
   socket.on('leaveRoom', async (payload: { roomId: string }) => {
     const roomIdResult = RoomId(payload.roomId);
     if (roomIdResult.isErr()) return;
-
-    ops.broadcastToRoom(payload.roomId, 'roomClosed', {
-      roomId: payload.roomId,
-      reason: 'user_left',
-    });
-    await messageService.deleteAllMessages(roomIdResult.value);
+    await roomManager.handleUserDisconnect(session.sessionId, roomIdResult.value);
   });
 
   socket.on('disconnect', async () => {
+    const roomResult = roomManager.getRoomBySessionId(session.sessionId);
+    if (roomResult.isOk()) {
+      await roomManager.handleUserDisconnect(session.sessionId, roomResult.value.id);
+    }
     await dequeueUser(session.sessionId);
     sessionManager.invalidateSession(session.sessionId);
   });
@@ -183,7 +184,8 @@ export function createWebSocketGateway(
   enqueueUser: EnqueueUser,
   dequeueUser: DequeueUser,
   tryMatch: TryMatch,
-  messageService: MessageServiceInterface
+  messageService: MessageServiceInterface,
+  roomManager: RoomManagerInterface
 ): Server {
   const io = new Server(httpServer, {
     cors: { origin: '*' },
@@ -202,7 +204,16 @@ export function createWebSocketGateway(
   };
 
   io.on('connection', (socket: Socket) => {
-    handleConnection(socket, sessionManager, enqueueUser, dequeueUser, tryMatch, messageService, ops);
+    handleConnection(
+      socket,
+      sessionManager,
+      enqueueUser,
+      dequeueUser,
+      tryMatch,
+      messageService,
+      roomManager,
+      ops
+    );
   });
 
   return io;
