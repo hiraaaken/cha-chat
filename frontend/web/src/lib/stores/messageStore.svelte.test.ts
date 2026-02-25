@@ -39,6 +39,39 @@ describe('messageStore', () => {
       expect(messageStore.messages[0].messageId).toBe('msg-1');
       expect(messageStore.messages[1].messageId).toBe('msg-2');
     });
+
+    it('同一送信者のメッセージが4件になったら最古を削除する', () => {
+      addMessage(createTestMessage({ messageId: 'msg-1', senderSessionId: 'user-a' }));
+      addMessage(createTestMessage({ messageId: 'msg-2', senderSessionId: 'user-a' }));
+      addMessage(createTestMessage({ messageId: 'msg-3', senderSessionId: 'user-a' }));
+      addMessage(createTestMessage({ messageId: 'msg-4', senderSessionId: 'user-a' }));
+
+      expect(messageStore.messages).toHaveLength(3);
+      expect(messageStore.messages.map((m) => m.messageId)).toEqual([
+        'msg-2',
+        'msg-3',
+        'msg-4',
+      ]);
+    });
+
+    it('異なる送信者のメッセージは影響を受けない', () => {
+      addMessage(createTestMessage({ messageId: 'a-1', senderSessionId: 'user-a' }));
+      addMessage(createTestMessage({ messageId: 'b-1', senderSessionId: 'user-b' }));
+      addMessage(createTestMessage({ messageId: 'a-2', senderSessionId: 'user-a' }));
+      addMessage(createTestMessage({ messageId: 'b-2', senderSessionId: 'user-b' }));
+      addMessage(createTestMessage({ messageId: 'a-3', senderSessionId: 'user-a' }));
+      addMessage(createTestMessage({ messageId: 'b-3', senderSessionId: 'user-b' }));
+
+      expect(messageStore.messages).toHaveLength(6);
+
+      addMessage(createTestMessage({ messageId: 'a-4', senderSessionId: 'user-a' }));
+
+      expect(messageStore.messages).toHaveLength(6);
+      expect(messageStore.messages.find((m) => m.messageId === 'a-1')).toBeUndefined();
+      expect(messageStore.messages.find((m) => m.messageId === 'b-1')).toBeDefined();
+      expect(messageStore.messages.find((m) => m.messageId === 'b-2')).toBeDefined();
+      expect(messageStore.messages.find((m) => m.messageId === 'b-3')).toBeDefined();
+    });
   });
 
   describe('removeMessage', () => {

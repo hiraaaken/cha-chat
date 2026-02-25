@@ -12,6 +12,10 @@
     return `${m}:${s}`;
   }
 
+  function isWarningTime(seconds: number): boolean {
+    return seconds < 60;
+  }
+
   function handleSend() {
     const text = inputText.trim();
     if (!text || !chatStore.roomId) return;
@@ -34,28 +38,64 @@
   function isOwnMessage(senderSessionId: string): boolean {
     return senderSessionId === connectionStore.sessionId;
   }
+
+  interface DepthStyle {
+    opacity: number;
+    scale: number;
+  }
+
+  const DEPTH_STYLES: DepthStyle[] = [
+    { opacity: 1.0, scale: 1.0 },
+    { opacity: 0.45, scale: 0.88 },
+    { opacity: 0.2, scale: 0.78 },
+  ];
+
+  function getDepthIndex(messageId: string, senderSessionId: string): number {
+    const senderMessages = messageStore.messages.filter(
+      (m) => m.senderSessionId === senderSessionId,
+    );
+    const reversed = [...senderMessages].reverse();
+    const idx = reversed.findIndex((m) => m.messageId === messageId);
+    return Math.min(idx, DEPTH_STYLES.length - 1);
+  }
+
+  function getMessageStyle(messageId: string, senderSessionId: string): string {
+    const idx = getDepthIndex(messageId, senderSessionId);
+    const { opacity, scale } = DEPTH_STYLES[idx];
+    return `opacity: ${opacity}; transform: scale(${scale}); transform-origin: ${isOwnMessage(senderSessionId) ? 'right' : 'left'} bottom;`;
+  }
 </script>
 
 <div class="chat-screen">
   <header class="header">
-    <span class="timer">{formatTime(chatStore.remainingSeconds)}</span>
+    <span class="timer" class:timer-warning={isWarningTime(chatStore.remainingSeconds)}>
+      {formatTime(chatStore.remainingSeconds)}
+    </span>
     <button class="leave-button" onclick={handleLeave}>退出</button>
   </header>
 
-  <ul class="message-list">
-    {#each messageStore.messages as message (message.messageId)}
-      <li class="message-item {isOwnMessage(message.senderSessionId) ? 'own' : 'other'}">
-        <span class="message-text">{message.text}</span>
-      </li>
-    {/each}
-  </ul>
+  <div class="message-area">
+    <ul class="message-list">
+      {#each messageStore.messages as message (message.messageId)}
+        <li
+          class="message-item"
+          class:own={isOwnMessage(message.senderSessionId)}
+          class:other={!isOwnMessage(message.senderSessionId)}
+          style={getMessageStyle(message.messageId, message.senderSessionId)}
+        >
+          <div class="bubble">
+            <span class="message-text">{message.text}</span>
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </div>
 
   <div class="input-area">
     <input
       class="text-input"
       type="text"
       bind:value={inputText}
-      oninput={(e) => { inputText = (e.currentTarget as HTMLInputElement).value; }}
       onkeydown={handleKeydown}
       placeholder="メッセージを入力..."
       aria-label="メッセージ入力"
@@ -86,6 +126,17 @@
     font-size: 1.25rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    transition: color 0.3s;
+  }
+
+  .timer-warning {
+    color: #fca5a5;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 
   .leave-button {
@@ -102,48 +153,86 @@
     background-color: rgba(255, 255, 255, 0.15);
   }
 
-  .message-list {
+  .message-area {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     overflow-y: auto;
     padding: 1rem;
+  }
+
+  .message-list {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     list-style: none;
-    margin: 0;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+    max-width: 400px;
   }
 
   .message-item {
     display: flex;
-    max-width: 75%;
+    transition: opacity 0.4s ease, transform 0.4s ease;
   }
 
   .message-item.own {
-    align-self: flex-end;
+    justify-content: flex-end;
+    margin-left: auto;
   }
 
   .message-item.other {
-    align-self: flex-start;
+    justify-content: flex-start;
+    margin-right: auto;
   }
 
-  .message-text {
-    padding: 0.5rem 0.75rem;
+  .bubble {
+    position: relative;
+    max-width: 85%;
+    padding: 0.625rem 0.875rem;
     border-radius: 1rem;
     font-size: 0.9375rem;
     word-break: break-word;
     white-space: pre-wrap;
+    line-height: 1.5;
   }
 
-  .message-item.own .message-text {
+  .message-item.own .bubble {
     background-color: #4f46e5;
     color: #fff;
     border-bottom-right-radius: 0.25rem;
   }
 
-  .message-item.other .message-text {
+  .message-item.own .bubble::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: -6px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid #4f46e5;
+    border-top: 6px solid transparent;
+    border-bottom: 0;
+  }
+
+  .message-item.other .bubble {
     background-color: #e5e7eb;
     color: #111827;
     border-bottom-left-radius: 0.25rem;
+  }
+
+  .message-item.other .bubble::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -6px;
+    width: 0;
+    height: 0;
+    border-right: 6px solid #e5e7eb;
+    border-top: 6px solid transparent;
+    border-bottom: 0;
   }
 
   .input-area {

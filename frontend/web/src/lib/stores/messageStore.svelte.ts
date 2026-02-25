@@ -1,3 +1,5 @@
+const MAX_MESSAGES_PER_SENDER = 3;
+
 export interface StoreMessage {
   readonly messageId: string;
   readonly senderSessionId: string;
@@ -14,7 +16,18 @@ export const messageStore = $state<MessageState>({
 });
 
 export function addMessage(message: StoreMessage) {
-  messageStore.messages = [...messageStore.messages, message];
+  const updated = [...messageStore.messages, message];
+
+  const senderMessages = updated.filter(
+    (m) => m.senderSessionId === message.senderSessionId,
+  );
+
+  if (senderMessages.length > MAX_MESSAGES_PER_SENDER) {
+    const oldestId = senderMessages[0].messageId;
+    messageStore.messages = updated.filter((m) => m.messageId !== oldestId);
+  } else {
+    messageStore.messages = updated;
+  }
 }
 
 export function removeMessage(messageId: string) {

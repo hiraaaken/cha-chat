@@ -47,8 +47,12 @@ vi.mock('../stores/matchingStore.svelte', () => ({
 
 vi.mock('../stores/chatStore.svelte', () => ({
   activate: vi.fn(),
+  startCountdown: vi.fn(),
+  stopCountdown: vi.fn(),
   updateRemainingSeconds: vi.fn(),
   close: vi.fn(),
+  selfLeave: vi.fn(),
+  chatStore: { roomStatus: 'active', roomId: null, remainingSeconds: 0, closeReason: null },
 }));
 
 vi.mock('../stores/messageStore.svelte', () => ({
@@ -159,12 +163,13 @@ describe('socketClient', () => {
       expect(matchingStore.startWaiting).toHaveBeenCalled();
     });
 
-    it('matchFound イベントで matched と activate を呼ぶ', async () => {
+    it('matchFound イベントで matched と activate と startCountdown を呼ぶ', async () => {
       await setup();
       const payload: MatchFoundPayload = { roomId: 'room-1', partnerSessionId: 'partner-1' };
       triggerEvent(WebSocketEvents.MATCH_FOUND, payload);
       expect(matchingStore.matched).toHaveBeenCalled();
       expect(chatStore.activate).toHaveBeenCalledWith('room-1');
+      expect(chatStore.startCountdown).toHaveBeenCalled();
     });
 
     it('newMessage イベントで addMessage を呼ぶ', async () => {
@@ -197,6 +202,16 @@ describe('socketClient', () => {
       triggerEvent(WebSocketEvents.ROOM_CLOSED, payload);
       expect(chatStore.close).toHaveBeenCalledWith('timeout');
       expect(messageStore.clearMessages).toHaveBeenCalled();
+    });
+
+    it('roomClosed イベントで既にclosedの場合はスキップする', async () => {
+      await setup();
+      (chatStore.chatStore as { roomStatus: string }).roomStatus = 'closed';
+      const payload: RoomClosedPayload = { roomId: 'room-1', reason: 'user_left' };
+      triggerEvent(WebSocketEvents.ROOM_CLOSED, payload);
+      expect(chatStore.close).not.toHaveBeenCalled();
+      expect(messageStore.clearMessages).not.toHaveBeenCalled();
+      (chatStore.chatStore as { roomStatus: string }).roomStatus = 'active';
     });
 
     it('timerUpdate イベントで updateRemainingSeconds を呼ぶ', async () => {
@@ -236,9 +251,10 @@ describe('socketClient', () => {
       });
     });
 
-    it('leaveRoom で leaveRoom イベントを emit する', async () => {
+    it('leaveRoom で selfLeave を呼び leaveRoom イベントを emit する', async () => {
       const { leaveRoom } = await setup();
       leaveRoom('room-1');
+      expect(chatStore.selfLeave).toHaveBeenCalled();
       expect(mockSocket.emit).toHaveBeenCalledWith(WebSocketEvents.LEAVE_ROOM, {
         roomId: 'room-1',
       });

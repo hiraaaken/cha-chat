@@ -6,6 +6,7 @@
   const CLOSE_REASON_MESSAGES: Record<string, string> = {
     timeout: '時間切れでチャットが終了しました',
     user_left: '相手が退出しました',
+    self_left: 'チャットを終了しました',
     reported: '報告によりチャットが終了しました',
   };
 
