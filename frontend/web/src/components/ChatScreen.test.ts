@@ -64,7 +64,7 @@ describe('ChatScreen', () => {
 
   describe('メッセージ一覧', () => {
     it('メッセージテキストを表示する', () => {
-      addMessage({ messageId: 'msg-1', senderSessionId: 'other-session', text: 'こんにちは', createdAt: '2024-01-01T00:00:00Z' });
+      addMessage({ messageId: 'msg-1', senderSessionId: 'other-session', text: 'こんにちは', createdAt: new Date().toISOString() });
       render(ChatScreen);
 
       expect(screen.getByText('こんにちは')).toBeInTheDocument();
