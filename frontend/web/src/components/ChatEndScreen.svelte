@@ -22,7 +22,7 @@
 </script>
 
 <div class="end-screen">
-  <h1 class="title">チャットが終了しました</h1>
+  <h1 class="end-message">チャットが終了しました</h1>
 
   {#if chatStore.closeReason}
     <p class="reason">{closeReasonMessage()}</p>
@@ -41,32 +41,40 @@
     gap: 1.5rem;
     padding: 1rem;
     text-align: center;
+    background-color: var(--color-bg);
   }
 
-  .title {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: #111827;
+  .end-message {
+    font-size: 1.25rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: var(--color-text-primary);
   }
 
   .reason {
-    font-size: 1rem;
-    color: #6b7280;
+    font-size: 0.8125rem;
+    font-weight: 300;
+    color: var(--color-text-muted);
+    letter-spacing: 0.05em;
   }
 
   .new-match-button {
-    padding: 0.75rem 2rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #fff;
-    background-color: #4f46e5;
-    border: none;
-    border-radius: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.875rem 2.5rem;
+    font-size: 0.9375rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
   }
 
   .new-match-button:hover {
-    background-color: #4338ca;
+    background-color: var(--color-text-primary);
+    color: var(--color-bg);
   }
 </style>
