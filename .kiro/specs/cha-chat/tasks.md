@@ -50,12 +50,11 @@
   - _Requirements: 5.4_
 
 ### - [ ] 3. データベースとキャッシュの接続確認
-- [ ] 3.1 (P) Supabase接続とDrizzle ORM初期設定
-  - `backend/src/infrastructure/database/drizzle.ts`にDrizzle ORM接続設定を実装
+- [x] 3.1 (P) Supabase接続とDrizzle ORM初期設定
+  - `backend/src/db/connection.ts`にDrizzle ORM接続設定を実装
   - 環境変数`DATABASE_URL`からPostgreSQL接続情報を取得
-  - 接続確認用のヘルパー関数を実装
-  - `backend/src/db/schema.ts`に空のスキーマファイルを作成
-  - drizzle.config.tsを作成してマイグレーション設定を追加
+  - `backend/src/db/schema.ts`にスキーマファイルを作成
+  - `drizzle.config.ts`を作成してマイグレーション設定を追加
   - _Requirements: 5.4_
 
 - [ ] 3.2 (P) Redis接続の実装
@@ -76,32 +75,32 @@
 
 ## Phase 1: WebSocket基本接続とセッション管理
 
-### - [ ] 4. ドメイン型定義の実装
-- [ ] 4.1 基盤型の定義
+### - [x] 4. ドメイン型定義の実装
+- [x] 4.1 基盤型の定義
   - `backend/src/domain/types/base.ts`にNewtype定義とValidationErrorクラスを実装
+  - `backend/src/domain/types/errors.ts`にエラー型（MatchingError、RoomError等）を実装
   - neverthrowのResult型を活用した型安全なエラーハンドリング基盤を構築
   - _Requirements: 7.2_
 
-- [ ] 4.2 値オブジェクトの定義
+- [x] 4.2 値オブジェクトの定義
   - `backend/src/domain/types/valueObjects.ts`にRoomId、SessionId、MessageId、MessageText、ReportReason、SocketIdのファクトリ関数を実装
   - 各値オブジェクトにバリデーションロジックを追加（UUID v4形式、文字数制限、HTMLタグ除去等）
   - _Requirements: 3.2, 4.3, 7.1, 7.2_
 
-- [ ] 4.3 セッションエンティティの定義
+- [x] 4.3 セッションエンティティの定義
   - `backend/src/domain/entities/session.ts`にSession、MatchingStatus（Waiting、Matched）の型定義を実装
   - ファクトリ関数（createSession、createWaiting、createMatched）を実装
   - _Requirements: 1.4, 7.2_
 
-### - [ ] 5. WebSocketサーバーとセッション管理の実装
-- [ ] 5.1 Socket.IOサーバーの統合
-  - `backend/src/infrastructure/websocket/websocketGateway.ts`にSocket.IOサーバー初期化コードを実装
+### - [x] 5. WebSocketサーバーとセッション管理の実装
+- [x] 5.1 Socket.IOサーバーの統合
+  - `backend/src/infrastructure/websocket/webSocketGateway.ts`にSocket.IOサーバー初期化コードを実装
   - HonoのHTTPサーバーとSocket.IOサーバーを同一HTTPサーバー上で統合
   - 接続（connection）、切断（disconnect）イベントのハンドラーを実装
-  - WebSocketイベントスキーマ（Zod）の基本構造を実装
   - _Requirements: 3.1, 5.4_
 
-- [ ] 5.2 SessionManagerの実装
-  - `backend/src/application/services/sessionManager.ts`にSessionManagerを実装
+- [x] 5.2 SessionManagerの実装
+  - `backend/src/infrastructure/sessionManager.ts`にInMemorySessionManagerを実装
   - WebSocket接続時にUUID v4で匿名セッションIDを生成する機能
   - セッションとSocketIdの紐付け管理機能
   - セッション無効化機能
@@ -125,20 +124,20 @@
 
 ## Phase 2: マッチング機能
 
-### - [ ] 6. チャットルームエンティティとイベントの定義
-- [ ] 6.1 チャットルームエンティティの定義
+### - [x] 6. チャットルームエンティティとイベントの定義
+- [x] 6.1 チャットルームエンティティの定義
   - `backend/src/domain/entities/chatRoom.ts`にChatRoom（Union型: ActiveChatRoom、ClosedChatRoom）を定義
   - ファクトリ関数（createActiveChatRoom、closeChatRoom）を実装
   - RoomCloseReason型（timeout、user_left、reported）を定義
   - _Requirements: 2.1, 2.3, 2.4_
 
-- [ ] 6.2 ドメインイベントの定義
+- [x] 6.2 ドメインイベントの定義
   - `backend/src/domain/events/index.ts`にDomainEvent型（MatchFoundEvent、MessageSentEvent、MessageDeletedEvent、RoomClosedEvent、PartnerDisconnectedEvent）を定義
   - 各イベントに必要なフィールド（roomId、sessionId、occurredAt等）を追加
   - _Requirements: 1.3, 2.4, 3.1_
 
-### - [ ] 7. データベーススキーマの作成
-- [ ] 7.1 Drizzleスキーマの定義
+### - [x] 7. データベーススキーマの作成
+- [x] 7.1 Drizzleスキーマの定義
   - `backend/src/db/schema.ts`にchat_rooms、messages、reportsテーブルのスキーマを定義
   - chat_roomsテーブル: id (UUID PK), user1_session_id, user2_session_id, created_at, expires_at, status
   - messagesテーブル: id (UUID PK), room_id (FK), sender_session_id, text, created_at
@@ -146,45 +145,42 @@
   - リレーション定義（chatRoomsRelations、messagesRelations）を追加
   - _Requirements: 2.1, 3.3, 7.3_
 
-- [ ] 7.2 マイグレーションの実行
-  - `drizzle-kit generate`でマイグレーションファイルを生成
-  - `drizzle-kit migrate`でSupabaseにスキーマを適用
+- [x] 7.2 マイグレーションの生成
+  - `drizzle-kit generate`でマイグレーションファイルを生成（`drizzle/0000_sticky_unus.sql`）
   - インデックス作成（messages: room_id + created_at DESC、room_id + sender_session_id + created_at DESC）
-  - pg_cronを使用した期限切れルームの自動削除ジョブを設定
   - _Requirements: 2.3, 2.4, 4.2_
 
-### - [ ] 8. マッチングサービスの実装
-- [ ] 8.1 MatchingServiceインターフェースと実装
+### - [x] 8. マッチングサービスの実装
+- [x] 8.1 MatchingServiceインターフェースと実装
   - `backend/src/application/interfaces/matchingServiceInterface.ts`にインターフェースを定義
-  - `backend/src/application/services/matchingService.ts`にMatchingServiceを実装
-  - enqueueUser: ユーザーをRedis待機キュー（LPUSH）に追加
-  - tryMatch: キューから2ユーザーを取得（RPOP x2）し、マッチング成立時にRoomManagerを呼び出し
+  - Workflowパターンで`enqueueUser`、`dequeueUser`、`tryMatch`を個別ファイルに実装
+  - `backend/src/infrastructure/matchingQueue.ts`にInMemoryMatchingQueue（FIFOキュー）を実装
   - _Requirements: 1.1, 1.2, 5.5_
 
-- [ ] 8.2 WebSocketGatewayへのマッチングイベント統合
-  - `requestMatch`イベント受信時にMatchingService.enqueueUserを呼び出し
+- [x] 8.2 WebSocketGatewayへのマッチングイベント統合
+  - `requestMatch`イベント受信時にenqueueUser→tryMatchを呼び出し
   - マッチング成立時にMatchFoundEventを両ユーザーに配信
   - 待機中の場合は`waiting`イベントを送信
   - エラーハンドリング（重複リクエスト、キューエラー等）を実装
   - _Requirements: 1.1, 1.2, 1.3_
 
-### - [ ] 9. RoomManagerの実装（MVP Scope - シンプルなタイマー）
-- [ ] 9.1 RoomManagerインターフェースと基本実装
+### - [x] 9. RoomManagerの実装（MVP Scope - シンプルなタイマー）
+- [x] 9.1 RoomManagerインターフェースと基本実装
   - `backend/src/application/interfaces/roomManagerInterface.ts`にインターフェースを定義
-  - `backend/src/application/services/roomManager.ts`にRoomManagerを実装
-  - createRoom: チャットルームをSupabaseに作成し、10分タイマーをsetTimeoutで開始
-  - closeRoom: ルーム状態を'closed'に更新し、タイマーをクリア
-  - getRoom、getRoomStatus: ルーム情報を取得
+  - `backend/src/infrastructure/roomManager.ts`にInMemoryRoomManagerを実装
+  - createRoom: チャットルームを作成し、10分タイマーをsetTimeoutで開始
+  - closeRoom: ルーム状態を更新し、タイマーをクリア
+  - getRoom、getRoomBySessionId: ルーム情報を取得
   - _Requirements: 2.1, 2.2, 2.3_
 
-- [ ] 9.2 タイマー管理機能の実装
+- [x] 9.2 タイマー管理機能の実装
   - ルーム作成時にexpiresAtを10分後に設定
-  - 1分ごとに残り時間を計算し、`timerUpdate`イベントを両ユーザーに配信
+  - timerUpdateイベントを両ユーザーに配信
   - 10分経過時に自動的にcloseRoomを呼び出し、`roomClosed`イベントを配信
   - タイマーIDをメモリ管理し、ルーム終了時にclearTimeoutを実行
   - _Requirements: 2.1, 2.2, 2.3, 6.1_
 
-- [ ] 9.3 ユーザー切断時の処理
+- [x] 9.3 ユーザー切断時の処理
   - handleUserDisconnect: 切断ユーザーのセッションIDを受け取り、相手に`partnerDisconnected`イベントを配信
   - ルームを即座にcloseし、タイマーをクリア
   - WebSocketGatewayのdisconnectイベントハンドラから呼び出し
@@ -207,8 +203,8 @@
 
 ## Phase 3: メッセージ送受信と自動削除
 
-### - [ ] 11. メッセージエンティティとイベントスキーマの実装
-- [ ] 11.1 メッセージエンティティの定義
+### - [x] 11. メッセージエンティティとイベントスキーマの実装
+- [x] 11.1 メッセージエンティティの定義
   - `backend/src/domain/entities/message.ts`にMessage型とcreateMessageファクトリ関数を実装
   - MessageId、RoomId、SessionId、MessageText、createdAtフィールドを含む
   - _Requirements: 3.3, 3.4_
@@ -220,43 +216,40 @@
   - 型推論（z.infer）でTypeScript型を生成
   - _Requirements: 3.1, 3.2, 3.5_
 
-- [ ] 11.3 共有型パッケージへの型定義追加
+- [x] 11.3 共有型パッケージへの型定義追加
   - `packages/shared-types/src/events.ts`にWebSocketイベント型（SendMessagePayload、NewMessagePayload等）をエクスポート
   - フロントエンドから`import { SendMessagePayload } from '@cha-chat/shared-types'`で利用可能にする
   - _Requirements: 5.4_
 
-### - [ ] 12. MessageServiceの実装
-- [ ] 12.1 MessageServiceインターフェースと基本実装
+### - [x] 12. MessageServiceの実装
+- [x] 12.1 MessageServiceインターフェースと基本実装
   - `backend/src/application/interfaces/messageServiceInterface.ts`にインターフェースを定義
-  - `backend/src/application/services/messageService.ts`にMessageServiceを実装
-  - sendMessage: メッセージをSupabaseに保存し、SendMessageResult（message、event、deletedMessages）を返す
+  - `backend/src/infrastructure/messageService.ts`にInMemoryMessageServiceを実装
+  - sendMessage: メッセージを保存し、SendMessageResult（message、deletedMessageId）を返す
   - getMessages: 指定ルームのメッセージ一覧を取得
   - deleteAllMessages: ルーム終了時に全メッセージを削除
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 12.2 メッセージ自動削除ロジックの実装
-  - deleteOldMessages: 指定ユーザーの送信メッセージ数をカウント
-  - 4件以上存在する場合、最も古いメッセージを削除
-  - sendMessage内でメッセージ保存後にdeleteOldMessagesを自動呼び出し
-  - 削除されたメッセージのMessageDeletedEventをリストで返す
+- [x] 12.2 メッセージ自動削除ロジックの実装
+  - sendMessage内で送信者のメッセージ数をカウント
+  - 3件を超える場合、最も古いメッセージを自動削除
+  - 削除されたメッセージのIDをdeletedMessageIdとして返す
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 12.3 WebSocketGatewayへのメッセージイベント統合
-  - `sendMessage`イベント受信時にZodバリデーションを実行
-  - MessageService.sendMessageを呼び出し、結果をroom内にブロードキャスト
-  - 新規メッセージは`newMessage`イベントで配信
+- [x] 12.3 WebSocketGatewayへのメッセージイベント統合
+  - `sendMessage`イベント受信時にMessageService.sendMessageを呼び出し
+  - 新規メッセージは`newMessage`イベントでroom内にブロードキャスト
   - 削除メッセージは`messageDeleted`イベントで送信者のみに配信
   - エラー発生時は`error`イベントを送信
   - _Requirements: 3.1, 3.5, 4.5_
 
-### - [ ] 13. チャットルーム終了処理の統合
-- [ ] 13.1 RoomManagerとMessageServiceの連携
+### - [x] 13. チャットルーム終了処理の統合
+- [x] 13.1 RoomManagerとMessageServiceの連携
   - RoomManager.closeRoom内でMessageService.deleteAllMessagesを呼び出し
-  - ルーム終了時にすべてのメッセージがSupabaseから削除されることを保証
-  - トランザクション処理でルーム状態更新とメッセージ削除を一括実行
+  - ルーム終了時にすべてのメッセージが削除されることを保証
   - _Requirements: 2.4, 7.3_
 
-- [ ] 13.2 `leaveRoom`イベントの実装
+- [x] 13.2 `leaveRoom`イベントの実装
   - WebSocketGatewayで`leaveRoom`イベントを受信
   - RoomManager.handleUserDisconnectを呼び出し
   - 相手ユーザーに`roomClosed`イベントを配信
@@ -287,18 +280,19 @@
 
 ## Phase 4: フロントエンド実装
 
-### - [ ] 15. Web版フロントエンド（Svelte）の基本構成
-- [ ] 15.1 (P) Svelteプロジェクトの初期化
-  - `frontend/web/`にSvelte + Viteプロジェクトを作成
+### - [x] 15. Web版フロントエンド（Svelte）の基本構成
+- [x] 15.1 (P) Svelteプロジェクトの初期化
+  - `frontend/web/`にSvelte 5 + Viteプロジェクトを作成
   - `frontend/web/package.json`にsocket.io-client、@cha-chat/shared-types等の依存関係を追加
-  - `frontend/web/vite.config.ts`を設定（VITE_API_URL、VITE_WS_URLの環境変数対応）
+  - `frontend/web/vite.config.ts`を設定（VITE_WS_URLの環境変数対応）
   - `frontend/web/tsconfig.json`を設定
   - _Requirements: 5.1, 5.6_
 
-- [ ] 15.2 (P) Socket.IOクライアントの実装
-  - `frontend/web/src/lib/websocket/socketClient.ts`にSocket.IO接続管理クラスを実装
-  - connect、disconnect、emit、onメソッドを提供
-  - 自動再接続機能を有効化
+- [x] 15.2 (P) Socket.IOクライアントの実装
+  - `frontend/web/src/lib/websocket/socketClient.ts`にSocket.IO接続管理を実装
+  - connect、disconnect、requestMatch、sendMessage、leaveRoom、reportContent関数を提供
+  - 自動再接続機能を有効化（5回リトライ、1秒間隔）
+  - 全WebSocketイベントのハンドラ登録（SESSION_CREATED、MATCH_FOUND、NEW_MESSAGE等）
   - _Requirements: 5.1, 5.4_
 
 ### - [x] 16. Svelte Storeによる状態管理（Runes: $state + 関数export パターン）
@@ -325,33 +319,33 @@
   - マッチング状態（idle/waiting/matched）を管理
   - _Requirements: 2.1, 2.2_
 
-### - [ ] 17. UIコンポーネントの実装
-- [ ] 17.1 (P) マッチング待機画面コンポーネント
-  - マッチングリクエストボタンを配置
-  - 待機中のローディング表示
+### - [x] 17. UIコンポーネントの実装
+- [x] 17.1 (P) マッチング待機画面コンポーネント
+  - `frontend/web/src/components/MatchingScreen.svelte`を実装
+  - マッチングリクエストボタン、待機中の砂時計アニメーション表示
   - `requestMatch`イベントを送信し、`waiting`または`matchFound`イベントを受信
   - _Requirements: 1.1, 6.5_
 
-- [ ] 17.2 (P) チャットルームコンポーネント
-  - `frontend/web/src/components/ChatRoom.svelte`を実装
-  - メッセージ一覧表示エリア
-  - メッセージ入力フィールドと送信ボタン
-  - 残り時間カウントダウン表示
+- [x] 17.2 (P) チャットルームコンポーネント
+  - `frontend/web/src/components/ChatScreen.svelte`を実装
+  - メッセージ表示エリア（空間配置・奥行き表現・フェードアニメーション）
+  - メッセージ入力フィールドと送信ボタン（Enter送信、Shift+Enter改行対応）
+  - 残り時間カウントダウン表示（MM:SS形式、1分未満で警告表示）
   - 退出ボタン
   - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 17.3 (P) メッセージリストコンポーネント
-  - `frontend/web/src/components/MessageList.svelte`を実装
-  - 自分のメッセージと相手のメッセージを視覚的に区別（背景色、配置等）
+- [x] 17.3 (P) メッセージリストコンポーネント
+  - ChatScreen.svelte内に統合して実装
+  - 自分のメッセージと相手のメッセージを配置位置で区別（右寄せ/左寄せ）
   - メッセージ削除時に該当メッセージをUIから即座に非表示
-  - スクロール制御（新規メッセージで自動スクロール）
+  - 深度ベースの透明度表現（最新3段階: 1.0, 0.5, 0.2）
   - _Requirements: 6.2, 6.4, 4.5_
 
-- [ ] 17.4 (P) タイマー表示コンポーネント
-  - `frontend/web/src/components/Timer.svelte`を実装
+- [x] 17.4 (P) タイマー表示コンポーネント
+  - ChatScreen.svelteのヘッダー内に統合して実装
   - 残り時間を「MM:SS」形式で表示
   - `timerUpdate`イベントを受信して表示を更新
-  - 残り時間が1分を切ったら警告色で表示
+  - 残り時間が1分を切ったら赤色＋パルスアニメーションで警告表示
   - _Requirements: 2.2, 6.1_
 
 ### - [ ] 18. Web版フロントエンドの動作確認
@@ -407,8 +401,8 @@
 
 ### - [ ] 20. セキュリティ機能の実装
 - [ ] 20.1 (P) 不適切コンテンツ報告機能
-  - `backend/src/domain/entities/report.ts`にReport型とファクトリ関数を実装
-  - `backend/src/application/services/reportService.ts`にReportServiceを実装
+  - `backend/src/domain/entities/report.ts`にReport型とファクトリ関数を実装 ← 済
+  - `backend/src/application/services/reportService.ts`にReportServiceを実装 ← 未着手
   - submitReport: 報告をSupabaseに保存
   - WebSocketGatewayで`reportContent`イベントを受信し、ReportServiceを呼び出し
   - _Requirements: 7.5_
@@ -425,11 +419,11 @@
   - _Requirements: 7.5_
 
 ### - [ ] 21. エラーハンドリングとモニタリング
-- [ ] 21.1 ErrorHandlerの実装
-  - `backend/src/infrastructure/error-handler.ts`にErrorHandlerクラスを実装
+- [x] 21.1 ErrorHandlerの実装
+  - `backend/src/infrastructure/errorHandler.ts`にhandleError関数を実装
   - handleError: エラーカテゴリ（VALIDATION、TRANSIENT、FATAL、BUSINESS_LOGIC）に応じた処理
   - retryWithBackoff: 指数バックオフによるリトライ機能
-  - 構造化ログ出力（JSON形式）
+  - 構造化ログ出力
   - _Requirements: 3.5_
 
 - [ ] 21.2 Circuit Breakerの実装
